@@ -81,8 +81,16 @@ struct SystemView: View {
                 await viewModel.fetchSystemInfo()
             }
         }
-        .alert(isPresented: .constant(viewModel.errorMessage != nil), error: SimpleError(msg: viewModel.errorMessage ?? "")) {
-            Button("OK", role: .cancel) { viewModel.errorMessage = nil }
+        .alert(
+            "Error",
+            isPresented: Binding(
+                get: { viewModel.errorMessage != nil },
+                set: { if !$0 { viewModel.errorMessage = nil } }
+            )
+        ) {
+            Button("OK", role: .cancel) { }
+        } message: {
+            Text(viewModel.errorMessage ?? "")
         }
     }
 }
@@ -107,7 +115,9 @@ struct DiskUsageRow: View {
     }
     
     private func formatBytes(_ bytes: Int64) -> String {
-        let megabytes = Double(bytes) / 1_000_000.0
-        return String(format: "%.2f MB", megabytes)
+        let formatter = ByteCountFormatter()
+        formatter.allowedUnits = [.useAll]
+        formatter.countStyle = .file
+        return formatter.string(fromByteCount: bytes)
     }
 }

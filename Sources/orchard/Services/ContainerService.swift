@@ -71,27 +71,25 @@ struct CLIContainerService: ContainerServiceProtocol {
     }
 
     func fetchContainers() async throws -> [ContainerItem] {
+        let output = try await runCommand(arguments: ["ls", "-a", "--format", "json"])
+        guard let data = output.data(using: .utf8) else {
+            throw ContainerServiceError.decodingFailed
+        }
+        
+        let decoder = JSONDecoder()
+        // Try decoding as a JSON array first
         do {
-            let output = try await runCommand(arguments: ["ls", "-a", "--format", "json"])
-            guard let data = output.data(using: .utf8) else { return [] }
-            
-            let decoder = JSONDecoder()
-            if let containers = try? decoder.decode([ContainerItem].self, from: data) {
-                return containers
-            } else {
-                let lines = output.components(separatedBy: .newlines).filter { !$0.trimmingCharacters(in: .whitespaces).isEmpty }
-                var items: [ContainerItem] = []
-                for line in lines {
-                    if let lineData = line.data(using: .utf8),
-                       let item = try? decoder.decode(ContainerItem.self, from: lineData) {
-                        items.append(item)
-                    }
-                }
-                return items
-            }
+            return try decoder.decode([ContainerItem].self, from: data)
         } catch {
-            print("Error fetching containers: \(error)")
-            return []
+            // Fallback: some CLI versions emit one JSON object per line
+            let lines = output.components(separatedBy: .newlines)
+                .filter { !$0.trimmingCharacters(in: .whitespaces).isEmpty }
+            var items: [ContainerItem] = []
+            for line in lines {
+                guard let lineData = line.data(using: .utf8) else { continue }
+                items.append(try decoder.decode(ContainerItem.self, from: lineData))
+            }
+            return items
         }
     }
 
@@ -157,7 +155,20 @@ struct CLIContainerService: ContainerServiceProtocol {
     func fetchVolumes() async throws -> [VolumeItem] {
         let output = try await runCommand(arguments: ["volume", "ls", "--format", "json"])
         guard let data = output.data(using: .utf8) else { return [] }
-        return try JSONDecoder().decode([VolumeItem].self, from: data)
+        var volumes = try JSONDecoder().decode([VolumeItem].self, from: data)
+        
+        // Compute actual on-disk size for sparse volume images
+        for i in volumes.indices {
+            if let source = volumes[i].source {
+                let url = URL(fileURLWithPath: source)
+                if let resourceValues = try? url.resourceValues(forKeys: [.totalFileAllocatedSizeKey]),
+                   let allocatedSize = resourceValues.totalFileAllocatedSize {
+                    volumes[i].actualSizeInBytes = Int64(allocatedSize)
+                }
+            }
+        }
+        
+        return volumes
     }
     func deleteVolume(name: String) async throws {
         _ = try await runCommand(arguments: ["volume", "rm", name])

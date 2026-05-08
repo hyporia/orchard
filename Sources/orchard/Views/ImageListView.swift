@@ -2,6 +2,7 @@ import SwiftUI
 
 struct ImageListView: View {
     var viewModel: ImageViewModel
+    @State private var imageToDelete: String?
     
     var body: some View {
         VStack {
@@ -38,7 +39,7 @@ struct ImageListView: View {
                         }
                         Spacer()
                         Button(role: .destructive, action: {
-                            Task { await viewModel.delete(reference: image.reference) }
+                            imageToDelete = image.reference
                         }) {
                             Label("Delete", systemImage: "trash")
                         }
@@ -65,8 +66,32 @@ struct ImageListView: View {
                 await viewModel.fetchImages()
             }
         }
-        .alert(isPresented: .constant(viewModel.errorMessage != nil), error: SimpleError(msg: viewModel.errorMessage ?? "")) {
-            Button("OK", role: .cancel) { viewModel.errorMessage = nil }
+        .alert(
+            "Error",
+            isPresented: Binding(
+                get: { viewModel.errorMessage != nil },
+                set: { if !$0 { viewModel.errorMessage = nil } }
+            )
+        ) {
+            Button("OK", role: .cancel) { }
+        } message: {
+            Text(viewModel.errorMessage ?? "")
+        }
+        .confirmationDialog(
+            "Delete Image?",
+            isPresented: Binding(
+                get: { imageToDelete != nil },
+                set: { if !$0 { imageToDelete = nil } }
+            ),
+            titleVisibility: .visible
+        ) {
+            Button("Delete", role: .destructive) {
+                if let reference = imageToDelete {
+                    Task { await viewModel.delete(reference: reference) }
+                }
+            }
+        } message: {
+            Text("This action cannot be undone.")
         }
     }
 }

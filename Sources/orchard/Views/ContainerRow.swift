@@ -9,6 +9,7 @@ struct ContainerRow: View {
     }
     
     @State private var showingLogs = false
+    @State private var showDeleteConfirmation = false
     
     var body: some View {
         HStack {
@@ -67,11 +68,22 @@ struct ContainerRow: View {
             }
             
             Button(role: .destructive, action: {
-                Task { await viewModel.delete(containerId: container.id) }
+                showDeleteConfirmation = true
             }) {
                 Label("Delete", systemImage: "trash")
             }
             .buttonStyle(.bordered)
+            .confirmationDialog(
+                "Delete Container?",
+                isPresented: $showDeleteConfirmation,
+                titleVisibility: .visible
+            ) {
+                Button("Delete", role: .destructive) {
+                    Task { await viewModel.delete(containerId: container.id) }
+                }
+            } message: {
+                Text("This action cannot be undone.")
+            }
         }
         .padding(.vertical, 4)
         .sheet(isPresented: $showingLogs) {

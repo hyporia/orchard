@@ -32,4 +32,10 @@ struct VolumeItem: Decodable, Identifiable, Sendable, Equatable {
     let driver: String?
     let source: String?
     let sizeInBytes: Int64?
+    /// Actual on-disk usage (for sparse volume images)
+    var actualSizeInBytes: Int64?
+    
+    private enum CodingKeys: String, CodingKey {
+        case name, format, driver, source, sizeInBytes
+    }
 }

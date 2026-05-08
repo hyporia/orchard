@@ -2,6 +2,7 @@ import SwiftUI
 
 struct VolumeListView: View {
     var viewModel: VolumeViewModel
+    @State private var volumeToDelete: String?
     
     var body: some View {
         VStack {
@@ -25,15 +26,15 @@ struct VolumeListView: View {
                                     .font(.subheadline)
                                     .foregroundStyle(.secondary)
                             }
-                            if let size = volume.sizeInBytes {
-                                Text("Size: \(formatBytes(size))")
+                            if let size = volume.actualSizeInBytes ?? volume.sizeInBytes {
+                                Text("Used: \(formatBytes(size))")
                                     .font(.caption)
                                     .foregroundStyle(.secondary)
                             }
                         }
                         Spacer()
                         Button(role: .destructive, action: {
-                            Task { await viewModel.delete(name: volume.name) }
+                            volumeToDelete = volume.name
                         }) {
                             Label("Delete", systemImage: "trash")
                         }
@@ -59,13 +60,39 @@ struct VolumeListView: View {
                 await viewModel.fetchVolumes()
             }
         }
-        .alert(isPresented: .constant(viewModel.errorMessage != nil), error: SimpleError(msg: viewModel.errorMessage ?? "")) {
-            Button("OK", role: .cancel) { viewModel.errorMessage = nil }
+        .alert(
+            "Error",
+            isPresented: Binding(
+                get: { viewModel.errorMessage != nil },
+                set: { if !$0 { viewModel.errorMessage = nil } }
+            )
+        ) {
+            Button("OK", role: .cancel) { }
+        } message: {
+            Text(viewModel.errorMessage ?? "")
+        }
+        .confirmationDialog(
+            "Delete Volume?",
+            isPresented: Binding(
+                get: { volumeToDelete != nil },
+                set: { if !$0 { volumeToDelete = nil } }
+            ),
+            titleVisibility: .visible
+        ) {
+            Button("Delete", role: .destructive) {
+                if let name = volumeToDelete {
+                    Task { await viewModel.delete(name: name) }
+                }
+            }
+        } message: {
+            Text("This action cannot be undone.")
         }
     }
     
     private func formatBytes(_ bytes: Int64) -> String {
-        let megabytes = Double(bytes) / 1_000_000.0
-        return String(format: "%.2f MB", megabytes)
+        let formatter = ByteCountFormatter()
+        formatter.allowedUnits = [.useAll]
+        formatter.countStyle = .file
+        return formatter.string(fromByteCount: bytes)
     }
 }

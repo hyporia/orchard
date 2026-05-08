@@ -102,13 +102,18 @@ struct ContainerListView: View {
         .onDisappear {
             viewModel.stopPolling()
         }
-        .alert(isPresented: .constant(viewModel.errorMessage != nil), error: SimpleError(msg: viewModel.errorMessage ?? "")) {
-            Button("OK", role: .cancel) { viewModel.errorMessage = nil }
+        .alert(
+            "Error",
+            isPresented: Binding(
+                get: { viewModel.errorMessage != nil },
+                set: { if !$0 { viewModel.errorMessage = nil } }
+            )
+        ) {
+            Button("OK", role: .cancel) { }
+        } message: {
+            Text(viewModel.errorMessage ?? "")
         }
     }
 }
 
-struct SimpleError: LocalizedError {
-    let msg: String
-    var errorDescription: String? { msg }
-}
+
