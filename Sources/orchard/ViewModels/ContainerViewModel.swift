@@ -1,12 +1,12 @@
 import Foundation
-import SwiftUI
 
 @MainActor
-class ContainerViewModel: ObservableObject {
-    @Published var containers: [ContainerItem] = []
-    @Published var stats: [String: ContainerStat] = [:]
-    @Published var isLoading: Bool = false
-    @Published var errorMessage: String?
+@Observable
+class ContainerViewModel {
+    var containers: [ContainerItem] = []
+    var stats: [String: ContainerStat] = [:]
+    var isLoading: Bool = false
+    var errorMessage: String?
     
     private let service: ContainerServiceProtocol
     private var pollingTask: Task<Void, Never>?
@@ -20,7 +20,7 @@ class ContainerViewModel: ObservableObject {
         pollingTask = Task {
             while !Task.isCancelled {
                 await fetchStats()
-                try? await Task.sleep(nanoseconds: 2_000_000_000) // 2 seconds
+                try? await Task.sleep(for: .seconds(2))
             }
         }
     }

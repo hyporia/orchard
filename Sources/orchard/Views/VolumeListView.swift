@@ -1,7 +1,7 @@
 import SwiftUI
 
 struct VolumeListView: View {
-    @ObservedObject var viewModel: VolumeViewModel
+    var viewModel: VolumeViewModel
     
     var body: some View {
         VStack {
@@ -9,16 +9,11 @@ struct VolumeListView: View {
                 ProgressView("Loading Volumes...")
                     .padding()
             } else if viewModel.volumes.isEmpty {
-                VStack {
-                    Image(systemName: "externaldrive")
-                        .font(.system(size: 60))
-                        .foregroundColor(.secondary)
-                        .padding()
-                    Text("No volumes found")
-                        .font(.headline)
-                        .foregroundColor(.secondary)
-                }
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                ContentUnavailableView(
+                    "No Volumes Found",
+                    systemImage: "externaldrive",
+                    description: Text("Volumes will appear here once created.")
+                )
             } else {
                 List(viewModel.volumes) { volume in
                     HStack {
@@ -28,12 +23,12 @@ struct VolumeListView: View {
                             if let format = volume.format {
                                 Text("Format: \(format)")
                                     .font(.subheadline)
-                                    .foregroundColor(.secondary)
+                                    .foregroundStyle(.secondary)
                             }
                             if let size = volume.sizeInBytes {
                                 Text("Size: \(formatBytes(size))")
                                     .font(.caption)
-                                    .foregroundColor(.secondary)
+                                    .foregroundStyle(.secondary)
                             }
                         }
                         Spacer()

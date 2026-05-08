@@ -1,11 +1,11 @@
 import SwiftUI
 
 struct ContainerLogView: View {
-    @StateObject private var viewModel: ContainerLogViewModel
+    @State private var viewModel: ContainerLogViewModel
     @Environment(\.dismiss) private var dismiss
 
     init(containerId: String) {
-        _viewModel = StateObject(wrappedValue: ContainerLogViewModel(containerId: containerId))
+        _viewModel = State(wrappedValue: ContainerLogViewModel(containerId: containerId))
     }
 
     var body: some View {

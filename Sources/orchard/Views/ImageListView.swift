@@ -1,7 +1,7 @@
 import SwiftUI
 
 struct ImageListView: View {
-    @ObservedObject var viewModel: ImageViewModel
+    var viewModel: ImageViewModel
     
     var body: some View {
         VStack {
@@ -9,16 +9,11 @@ struct ImageListView: View {
                 ProgressView("Loading Images...")
                     .padding()
             } else if viewModel.images.isEmpty {
-                VStack {
-                    Image(systemName: "photo")
-                        .font(.system(size: 60))
-                        .foregroundColor(.secondary)
-                        .padding()
-                    Text("No images found")
-                        .font(.headline)
-                        .foregroundColor(.secondary)
-                }
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                ContentUnavailableView(
+                    "No Images Found",
+                    systemImage: "photo",
+                    description: Text("Images will appear here once pulled.")
+                )
             } else {
                 List(viewModel.images) { image in
                     let isActive = viewModel.activeImages.contains(image.reference)
@@ -33,13 +28,13 @@ struct ImageListView: View {
                                         .padding(.horizontal, 6)
                                         .padding(.vertical, 2)
                                         .background(Color.green.opacity(0.2))
-                                        .foregroundColor(.green)
+                                        .foregroundStyle(.green)
                                         .cornerRadius(4)
                                 }
                             }
                             Text("Size: \(image.fullSize ?? "Unknown")")
                                 .font(.subheadline)
-                                .foregroundColor(.secondary)
+                                .foregroundStyle(.secondary)
                         }
                         Spacer()
                         Button(role: .destructive, action: {

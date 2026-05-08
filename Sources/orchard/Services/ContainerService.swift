@@ -37,27 +37,37 @@ enum ContainerServiceError: Error, LocalizedError {
 
 struct CLIContainerService: ContainerServiceProtocol {
     private func runCommand(arguments: [String]) async throws -> String {
-        let process = Process()
-        process.executableURL = URL(fileURLWithPath: "/usr/bin/env")
-        process.arguments = ["container"] + arguments
-        
-        let stdoutPipe = Pipe()
-        let stderrPipe = Pipe()
-        process.standardOutput = stdoutPipe
-        process.standardError = stderrPipe
-        
-        try process.run()
-        process.waitUntilExit()
-        
-        let stdoutData = stdoutPipe.fileHandleForReading.readDataToEndOfFile()
-        let stderrData = stderrPipe.fileHandleForReading.readDataToEndOfFile()
-        
-        if process.terminationStatus != 0 {
-            let errorMsg = String(data: stderrData, encoding: .utf8) ?? "Unknown error"
-            throw ContainerServiceError.processFailed(errorMsg)
+        try await withCheckedThrowingContinuation { continuation in
+            DispatchQueue.global(qos: .userInitiated).async {
+                do {
+                    let process = Process()
+                    process.executableURL = URL(fileURLWithPath: "/usr/bin/env")
+                    process.arguments = ["container"] + arguments
+                    
+                    let stdoutPipe = Pipe()
+                    let stderrPipe = Pipe()
+                    process.standardOutput = stdoutPipe
+                    process.standardError = stderrPipe
+                    
+                    try process.run()
+                    process.waitUntilExit()
+                    
+                    let stdoutData = stdoutPipe.fileHandleForReading.readDataToEndOfFile()
+                    let stderrData = stderrPipe.fileHandleForReading.readDataToEndOfFile()
+                    
+                    if process.terminationStatus != 0 {
+                        let errorMsg = String(data: stderrData, encoding: .utf8) ?? "Unknown error"
+                        continuation.resume(throwing: ContainerServiceError.processFailed(errorMsg))
+                        return
+                    }
+                    
+                    let output = String(data: stdoutData, encoding: .utf8) ?? ""
+                    continuation.resume(returning: output)
+                } catch {
+                    continuation.resume(throwing: error)
+                }
+            }
         }
-        
-        return String(data: stdoutData, encoding: .utf8) ?? ""
     }
 
     func fetchContainers() async throws -> [ContainerItem] {

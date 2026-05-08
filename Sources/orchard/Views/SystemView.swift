@@ -1,7 +1,7 @@
 import SwiftUI
 
 struct SystemView: View {
-    @ObservedObject var viewModel: SystemViewModel
+    var viewModel: SystemViewModel
     
     var body: some View {
         ScrollView {
@@ -41,7 +41,7 @@ struct SystemView: View {
                         
                         HStack {
                             Text("Version")
-                                .foregroundColor(.secondary)
+                                .foregroundStyle(.secondary)
                             Spacer()
                             Text(info.version)
                                 .font(.system(.body, design: .monospaced))
@@ -101,7 +101,7 @@ struct DiskUsageRow: View {
                     .font(.subheadline)
                 Text("Size: \(formatBytes(stat.sizeInBytes))")
                     .font(.caption)
-                    .foregroundColor(.secondary)
+                    .foregroundStyle(.secondary)
             }
         }
     }

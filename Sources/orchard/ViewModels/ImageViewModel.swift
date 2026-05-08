@@ -1,12 +1,12 @@
 import Foundation
-import SwiftUI
 
 @MainActor
-class ImageViewModel: ObservableObject {
-    @Published var images: [ImageItem] = []
-    @Published var activeImages: Set<String> = []
-    @Published var isLoading: Bool = false
-    @Published var errorMessage: String?
+@Observable
+class ImageViewModel {
+    var images: [ImageItem] = []
+    var activeImages: Set<String> = []
+    var isLoading: Bool = false
+    var errorMessage: String?
     
     private let service: ContainerServiceProtocol
     

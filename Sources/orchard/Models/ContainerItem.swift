@@ -1,11 +1,11 @@
 import Foundation
 
-struct ContainerItem: Identifiable, Equatable {
-    var id: String
-    var image: String
-    var state: String
-    var status: String
-    var names: String
+struct ContainerItem: Identifiable, Equatable, Sendable {
+    let id: String
+    let image: String
+    let state: String
+    let status: String
+    let names: String
 }
 
 extension ContainerItem: Decodable {

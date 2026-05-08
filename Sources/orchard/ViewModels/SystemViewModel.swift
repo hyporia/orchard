@@ -1,11 +1,11 @@
 import Foundation
-import SwiftUI
 
 @MainActor
-class SystemViewModel: ObservableObject {
-    @Published var systemInfo: SystemInfo?
-    @Published var isLoading: Bool = false
-    @Published var errorMessage: String?
+@Observable
+class SystemViewModel {
+    var systemInfo: SystemInfo?
+    var isLoading: Bool = false
+    var errorMessage: String?
     
     private let service: ContainerServiceProtocol
     
@@ -51,7 +51,7 @@ class SystemViewModel: ObservableObject {
         do {
             try await service.startSystem()
             // Add a small delay to allow the daemon to start before fetching status
-            try await Task.sleep(nanoseconds: 1_000_000_000)
+            try await Task.sleep(for: .seconds(1))
             await fetchSystemInfo()
         } catch {
             errorMessage = error.localizedDescription
@@ -63,7 +63,7 @@ class SystemViewModel: ObservableObject {
         isLoading = true
         do {
             try await service.stopSystem()
-            try await Task.sleep(nanoseconds: 1_000_000_000)
+            try await Task.sleep(for: .seconds(1))
             await fetchSystemInfo()
         } catch {
             errorMessage = error.localizedDescription

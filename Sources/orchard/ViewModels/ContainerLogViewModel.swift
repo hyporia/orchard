@@ -1,9 +1,9 @@
 import Foundation
-import SwiftUI
 
 @MainActor
-class ContainerLogViewModel: ObservableObject {
-    @Published var logs: String = ""
+@Observable
+class ContainerLogViewModel {
+    var logs: String = ""
     private var process: Process?
     private var logPipe: Pipe?
     let containerId: String
@@ -23,19 +23,15 @@ class ContainerLogViewModel: ObservableObject {
         process?.standardOutput = logPipe
         process?.standardError = logPipe // Merge stdout and stderr
 
-        logPipe?.fileHandleForReading.readabilityHandler = { [weak self] handle in
+        logPipe?.fileHandleForReading.readabilityHandler = { @Sendable [weak self] handle in
             let data = handle.availableData
             if data.isEmpty {
                 handle.readabilityHandler = nil
                 return
             }
             if let string = String(data: data, encoding: .utf8) {
-                DispatchQueue.main.async {
-                    self?.logs.append(string)
-                    // Optional: keep memory footprint small by truncating if too large
-                    if let currentLogs = self?.logs, currentLogs.count > 50000 {
-                        self?.logs = String(currentLogs.suffix(40000))
-                    }
+                Task { @MainActor in
+                    self?.appendLog(string)
                 }
             }
         }
@@ -44,6 +40,14 @@ class ContainerLogViewModel: ObservableObject {
             try process?.run()
         } catch {
             logs.append("\nError starting process: \(error.localizedDescription)\n")
+        }
+    }
+
+    private func appendLog(_ string: String) {
+        logs.append(string)
+        // Keep memory footprint small by truncating if too large
+        if logs.count > 50000 {
+            logs = String(logs.suffix(40000))
         }
     }
 

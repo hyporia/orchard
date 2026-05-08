@@ -2,7 +2,7 @@ import SwiftUI
 
 struct ContainerRow: View {
     let container: ContainerItem
-    @ObservedObject var viewModel: ContainerViewModel
+    var viewModel: ContainerViewModel
     
     var isRunning: Bool {
         container.state.lowercased() == "running"
@@ -21,21 +21,21 @@ struct ContainerRow: View {
                     .font(.headline)
                 Text(container.image)
                     .font(.subheadline)
-                    .foregroundColor(.secondary)
+                    .foregroundStyle(.secondary)
                 
                 if isRunning, let stat = viewModel.stats[container.id] {
                     HStack(spacing: 12) {
                         Label(formatCPU(stat.cpuUsageUsec), systemImage: "cpu")
                             .font(.caption)
-                            .foregroundColor(.blue)
+                            .foregroundStyle(.blue)
                         Label(formatMemory(stat.memoryUsageBytes), systemImage: "memorychip")
                             .font(.caption)
-                            .foregroundColor(.purple)
+                            .foregroundStyle(.purple)
                     }
                 } else {
                     Text(container.status)
                         .font(.caption)
-                        .foregroundColor(.secondary)
+                        .foregroundStyle(.secondary)
                 }
             }
             

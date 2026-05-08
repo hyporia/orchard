@@ -1,11 +1,11 @@
 import Foundation
-import SwiftUI
 
 @MainActor
-class VolumeViewModel: ObservableObject {
-    @Published var volumes: [VolumeItem] = []
-    @Published var isLoading: Bool = false
-    @Published var errorMessage: String?
+@Observable
+class VolumeViewModel {
+    var volumes: [VolumeItem] = []
+    var isLoading: Bool = false
+    var errorMessage: String?
     
     private let service: ContainerServiceProtocol
     

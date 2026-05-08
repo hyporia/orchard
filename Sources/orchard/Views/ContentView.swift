@@ -1,11 +1,20 @@
 import SwiftUI
 
 struct ContentView: View {
-    @StateObject private var systemViewModel = SystemViewModel()
-    @StateObject private var containerViewModel = ContainerViewModel()
-    @StateObject private var imageViewModel = ImageViewModel()
-    @StateObject private var volumeViewModel = VolumeViewModel()
+    private let service: ContainerServiceProtocol
+    @State private var systemViewModel: SystemViewModel
+    @State private var containerViewModel: ContainerViewModel
+    @State private var imageViewModel: ImageViewModel
+    @State private var volumeViewModel: VolumeViewModel
     @State private var selection: String? = "system"
+    
+    init(service: ContainerServiceProtocol = CLIContainerService()) {
+        self.service = service
+        self._systemViewModel = State(initialValue: SystemViewModel(service: service))
+        self._containerViewModel = State(initialValue: ContainerViewModel(service: service))
+        self._imageViewModel = State(initialValue: ImageViewModel(service: service))
+        self._volumeViewModel = State(initialValue: VolumeViewModel(service: service))
+    }
     
     var isSystemRunning: Bool {
         systemViewModel.systemInfo?.isRunning == true
@@ -37,24 +46,24 @@ struct ContentView: View {
             }
             .navigationTitle("Orchard")
         } detail: {
-            if selection == "system" {
+            switch selection {
+            case "system":
                 SystemView(viewModel: systemViewModel)
-            } else if selection == "containers" {
+            case "containers":
                 ContainerListView(viewModel: containerViewModel)
-            } else if selection == "images" {
+            case "images":
                 ImageListView(viewModel: imageViewModel)
-            } else if selection == "volumes" {
+            case "volumes":
                 VolumeListView(viewModel: volumeViewModel)
-            } else {
-                Text("Not implemented yet")
-                    .foregroundColor(.secondary)
+            default:
+                ContentUnavailableView("Select a section", systemImage: "sidebar.left")
             }
         }
     }
 }
 
 struct ContainerListView: View {
-    @ObservedObject var viewModel: ContainerViewModel
+    var viewModel: ContainerViewModel
     
     var body: some View {
         VStack {
@@ -62,16 +71,11 @@ struct ContainerListView: View {
                 ProgressView("Loading Containers...")
                     .padding()
             } else if viewModel.containers.isEmpty {
-                VStack {
-                    Image(systemName: "shippingbox")
-                        .font(.system(size: 60))
-                        .foregroundColor(.secondary)
-                        .padding()
-                    Text("No containers found")
-                        .font(.headline)
-                        .foregroundColor(.secondary)
-                }
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                ContentUnavailableView(
+                    "No Containers Found",
+                    systemImage: "shippingbox",
+                    description: Text("Containers will appear here once created.")
+                )
             } else {
                 List(viewModel.containers) { container in
                     ContainerRow(container: container, viewModel: viewModel)
