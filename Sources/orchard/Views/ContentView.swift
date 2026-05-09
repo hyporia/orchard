@@ -24,22 +24,42 @@ struct ContentView: View {
         NavigationSplitView {
             List(selection: $selection) {
                 NavigationLink(value: "system") {
-                    Label("System", systemImage: "desktopcomputer")
+                    Label {
+                        Text("System")
+                    } icon: {
+                        Image(systemName: "desktopcomputer")
+                            .foregroundStyle(.blue)
+                    }
                 }
                 
                 Section("Management") {
                     NavigationLink(value: "containers") {
-                        Label("Containers", systemImage: "shippingbox")
+                        Label {
+                            Text("Containers")
+                        } icon: {
+                            Image(systemName: "shippingbox.fill")
+                                .foregroundStyle(.orange)
+                        }
                     }
                     .disabled(!isSystemRunning)
                     
                     NavigationLink(value: "images") {
-                        Label("Images", systemImage: "photo")
+                        Label {
+                            Text("Images")
+                        } icon: {
+                            Image(systemName: "photo.fill")
+                                .foregroundStyle(.purple)
+                        }
                     }
                     .disabled(!isSystemRunning)
                     
                     NavigationLink(value: "volumes") {
-                        Label("Volumes", systemImage: "externaldrive")
+                        Label {
+                            Text("Volumes")
+                        } icon: {
+                            Image(systemName: "externaldrive.fill")
+                                .foregroundStyle(.green)
+                        }
                     }
                     .disabled(!isSystemRunning)
                 }
@@ -77,10 +97,16 @@ struct ContainerListView: View {
                     description: Text("Containers will appear here once created.")
                 )
             } else {
-                List(viewModel.containers) { container in
-                    ContainerRow(container: container, viewModel: viewModel)
+                ScrollView {
+                    LazyVStack(spacing: 12) {
+                        ForEach(viewModel.containers) { container in
+                            ContainerRow(container: container, viewModel: viewModel)
+                        }
+                    }
+                    .padding()
                 }
-                .listStyle(.inset(alternatesRowBackgrounds: true))
+                .background(Color(nsColor: .windowBackgroundColor))
+                .animation(.snappy, value: viewModel.containers)
             }
         }
         .navigationTitle("Containers")

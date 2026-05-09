@@ -16,39 +16,53 @@ struct ImageListView: View {
                     description: Text("Images will appear here once pulled.")
                 )
             } else {
-                List(viewModel.images) { image in
-                    let isActive = viewModel.activeImages.contains(image.reference)
-                    HStack {
-                        VStack(alignment: .leading) {
+                ScrollView {
+                    LazyVStack(spacing: 12) {
+                        ForEach(viewModel.images) { image in
+                            let isActive = viewModel.activeImages.contains(image.reference)
                             HStack {
-                                Text(image.reference)
-                                    .font(.headline)
-                                if isActive {
-                                    Text("Active")
-                                        .font(.caption2).bold()
-                                        .padding(.horizontal, 6)
-                                        .padding(.vertical, 2)
-                                        .background(Color.green.opacity(0.2))
-                                        .foregroundStyle(.green)
-                                        .cornerRadius(4)
+                                VStack(alignment: .leading, spacing: 4) {
+                                    HStack {
+                                        Text(image.reference)
+                                            .font(.headline)
+                                        if isActive {
+                                            Text("Active")
+                                                .font(.caption2).bold()
+                                                .padding(.horizontal, 6)
+                                                .padding(.vertical, 2)
+                                                .background(Color.green.opacity(0.2))
+                                                .foregroundStyle(.green)
+                                                .clipShape(Capsule())
+                                        }
+                                    }
+                                    Text("Size: \(image.fullSize ?? "Unknown")")
+                                        .font(.subheadline)
+                                        .foregroundStyle(.secondary)
                                 }
+                                Spacer()
+                                Button(role: .destructive, action: {
+                                    imageToDelete = image.reference
+                                }) {
+                                    Label("Delete", systemImage: "trash")
+                                }
+                                .buttonStyle(.plain)
+                                .padding(.horizontal, 10)
+                                .padding(.vertical, 6)
+                                .background(isActive ? Color.gray.opacity(0.1) : Color.red.opacity(0.1))
+                                .foregroundStyle(isActive ? .gray : .red)
+                                .clipShape(Capsule())
+                                .disabled(isActive)
                             }
-                            Text("Size: \(image.fullSize ?? "Unknown")")
-                                .font(.subheadline)
-                                .foregroundStyle(.secondary)
+                            .padding(16)
+                            .background(Color(nsColor: .controlBackgroundColor))
+                            .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+                            .shadow(color: Color.black.opacity(0.05), radius: 8, x: 0, y: 4)
                         }
-                        Spacer()
-                        Button(role: .destructive, action: {
-                            imageToDelete = image.reference
-                        }) {
-                            Label("Delete", systemImage: "trash")
-                        }
-                        .buttonStyle(.bordered)
-                        .disabled(isActive)
                     }
-                    .padding(.vertical, 4)
+                    .padding()
                 }
-                .listStyle(.inset(alternatesRowBackgrounds: true))
+                .background(Color(nsColor: .windowBackgroundColor))
+                .animation(.snappy, value: viewModel.images)
             }
         }
         .navigationTitle("Images")

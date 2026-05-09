@@ -13,58 +13,107 @@ struct SystemView: View {
                 } else if let info = viewModel.systemInfo {
                     
                     // Status Section
-                    GroupBox("Status") {
-                        HStack {
-                            Circle()
-                                .fill(info.isRunning ? Color.green : Color.red)
-                                .frame(width: 12, height: 12)
-                            Text(info.status.capitalized)
-                                .font(.headline)
-                            Spacer()
-                            if !info.isRunning {
-                                Button("Start System") {
-                                    Task { await viewModel.startSystem() }
+                    VStack(alignment: .leading, spacing: 16) {
+                        Text("Status")
+                            .font(.headline)
+                            .foregroundStyle(.secondary)
+                            .padding(.horizontal, 4)
+                        
+                        VStack(spacing: 0) {
+                            HStack {
+                                Circle()
+                                    .fill(info.isRunning ? Color.green : Color.red)
+                                    .frame(width: 12, height: 12)
+                                Text(info.status.capitalized)
+                                    .font(.headline)
+                                Spacer()
+                                if !info.isRunning {
+                                    Button(action: {
+                                        Task {
+                                            await viewModel.startSystem()
+                                        }
+                                    }) {
+                                        if viewModel.isLoading {
+                                            ProgressView().controlSize(.small).tint(.green)
+                                        } else {
+                                            Text("Start System")
+                                        }
+                                    }
+                                    .buttonStyle(.plain)
+                                    .padding(.horizontal, 12)
+                                    .padding(.vertical, 6)
+                                    .background(Color.green.opacity(0.1))
+                                    .foregroundStyle(.green)
+                                    .clipShape(Capsule())
+                                    .disabled(viewModel.isLoading)
+                                } else {
+                                    Button(action: {
+                                        Task {
+                                            await viewModel.stopSystem()
+                                        }
+                                    }) {
+                                        if viewModel.isLoading {
+                                            ProgressView().controlSize(.small).tint(.red)
+                                        } else {
+                                            Text("Stop System")
+                                        }
+                                    }
+                                    .buttonStyle(.plain)
+                                    .padding(.horizontal, 12)
+                                    .padding(.vertical, 6)
+                                    .background(Color.red.opacity(0.1))
+                                    .foregroundStyle(.red)
+                                    .clipShape(Capsule())
+                                    .disabled(viewModel.isLoading)
                                 }
-                                .buttonStyle(.borderedProminent)
-                                .disabled(viewModel.isLoading)
-                            } else {
-                                Button("Stop System", role: .destructive) {
-                                    Task { await viewModel.stopSystem() }
-                                }
-                                .buttonStyle(.bordered)
-                                .disabled(viewModel.isLoading)
                             }
+                            .padding()
+                            
+                            Divider()
+                            
+                            HStack {
+                                Text("Version")
+                                    .foregroundStyle(.secondary)
+                                Spacer()
+                                Text(info.version)
+                                    .font(.system(.body, design: .monospaced))
+                            }
+                            .padding()
                         }
-                        .padding(.vertical, 4)
-                        
-                        Divider()
-                        
-                        HStack {
-                            Text("Version")
-                                .foregroundStyle(.secondary)
-                            Spacer()
-                            Text(info.version)
-                                .font(.system(.body, design: .monospaced))
-                        }
-                        .padding(.vertical, 4)
+                        .background(Color(nsColor: .controlBackgroundColor))
+                        .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+                        .shadow(color: Color.black.opacity(0.05), radius: 8, x: 0, y: 4)
                     }
                     
                     // Disk Usage Section
                     if let df = info.diskUsage {
-                        GroupBox("Disk Usage") {
-                            VStack(spacing: 12) {
+                        VStack(alignment: .leading, spacing: 16) {
+                            Text("Disk Usage")
+                                .font(.headline)
+                                .foregroundStyle(.secondary)
+                                .padding(.horizontal, 4)
+                                
+                            VStack(spacing: 0) {
                                 DiskUsageRow(title: "Containers", stat: df.containers)
+                                    .padding()
                                 Divider()
                                 DiskUsageRow(title: "Images", stat: df.images)
+                                    .padding()
                                 Divider()
                                 DiskUsageRow(title: "Volumes", stat: df.volumes)
+                                    .padding()
                             }
+                            .background(Color(nsColor: .controlBackgroundColor))
+                            .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+                            .shadow(color: Color.black.opacity(0.05), radius: 8, x: 0, y: 4)
                         }
                     }
                 }
             }
             .padding()
         }
+        .animation(.snappy, value: viewModel.isLoading)
+        .animation(.snappy, value: viewModel.systemInfo?.isRunning)
         .navigationTitle("System")
         .toolbar {
             ToolbarItem(placement: .primaryAction) {

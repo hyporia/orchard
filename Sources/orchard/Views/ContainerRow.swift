@@ -10,6 +10,7 @@ struct ContainerRow: View {
     
     @State private var showingLogs = false
     @State private var showDeleteConfirmation = false
+    @State private var isProcessing = false
     
     var body: some View {
         HStack {
@@ -47,24 +48,54 @@ struct ContainerRow: View {
             }) {
                 Label("Logs", systemImage: "text.alignleft")
             }
-            .buttonStyle(.bordered)
+            .buttonStyle(.plain)
+            .padding(.horizontal, 10)
+            .padding(.vertical, 6)
+            .background(Color.secondary.opacity(0.1))
+            .clipShape(Capsule())
             
             if isRunning {
                 Button(action: {
-                    Task { await viewModel.stop(containerId: container.id) }
+                    Task {
+                        withAnimation(.snappy) { isProcessing = true }
+                        await viewModel.stop(containerId: container.id)
+                        withAnimation(.snappy) { isProcessing = false }
+                    }
                 }) {
-                    Label("Stop", systemImage: "stop.fill")
+                    if isProcessing {
+                        ProgressView().controlSize(.small).tint(.orange)
+                    } else {
+                        Label("Stop", systemImage: "stop.fill")
+                    }
                 }
-                .buttonStyle(.bordered)
-                .tint(.red)
+                .buttonStyle(.plain)
+                .padding(.horizontal, 10)
+                .padding(.vertical, 6)
+                .background(Color.orange.opacity(0.1))
+                .foregroundStyle(.orange)
+                .clipShape(Capsule())
+                .disabled(isProcessing)
             } else {
                 Button(action: {
-                    Task { await viewModel.start(containerId: container.id) }
+                    Task {
+                        withAnimation(.snappy) { isProcessing = true }
+                        await viewModel.start(containerId: container.id)
+                        withAnimation(.snappy) { isProcessing = false }
+                    }
                 }) {
-                    Label("Start", systemImage: "play.fill")
+                    if isProcessing {
+                        ProgressView().controlSize(.small).tint(.green)
+                    } else {
+                        Label("Start", systemImage: "play.fill")
+                    }
                 }
-                .buttonStyle(.bordered)
-                .tint(.green)
+                .buttonStyle(.plain)
+                .padding(.horizontal, 10)
+                .padding(.vertical, 6)
+                .background(Color.green.opacity(0.1))
+                .foregroundStyle(.green)
+                .clipShape(Capsule())
+                .disabled(isProcessing)
             }
             
             Button(role: .destructive, action: {
@@ -72,7 +103,12 @@ struct ContainerRow: View {
             }) {
                 Label("Delete", systemImage: "trash")
             }
-            .buttonStyle(.bordered)
+            .buttonStyle(.plain)
+            .padding(.horizontal, 10)
+            .padding(.vertical, 6)
+            .background(Color.red.opacity(0.1))
+            .foregroundStyle(.red)
+            .clipShape(Capsule())
             .confirmationDialog(
                 "Delete Container?",
                 isPresented: $showDeleteConfirmation,
@@ -85,7 +121,12 @@ struct ContainerRow: View {
                 Text("This action cannot be undone.")
             }
         }
-        .padding(.vertical, 4)
+        .animation(.snappy, value: isRunning)
+        .animation(.snappy, value: isProcessing)
+        .padding(16)
+        .background(Color(nsColor: .controlBackgroundColor))
+        .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .shadow(color: Color.black.opacity(0.05), radius: 8, x: 0, y: 4)
         .sheet(isPresented: $showingLogs) {
             ContainerLogView(containerId: container.id)
                 .frame(minWidth: 500, minHeight: 400)

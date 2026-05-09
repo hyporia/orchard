@@ -16,33 +16,47 @@ struct VolumeListView: View {
                     description: Text("Volumes will appear here once created.")
                 )
             } else {
-                List(viewModel.volumes) { volume in
-                    HStack {
-                        VStack(alignment: .leading) {
-                            Text(volume.name)
-                                .font(.headline)
-                            if let format = volume.format {
-                                Text("Format: \(format)")
-                                    .font(.subheadline)
-                                    .foregroundStyle(.secondary)
+                ScrollView {
+                    LazyVStack(spacing: 12) {
+                        ForEach(viewModel.volumes) { volume in
+                            HStack {
+                                VStack(alignment: .leading, spacing: 4) {
+                                    Text(volume.name)
+                                        .font(.headline)
+                                    if let format = volume.format {
+                                        Text("Format: \(format)")
+                                            .font(.subheadline)
+                                            .foregroundStyle(.secondary)
+                                    }
+                                    if let size = volume.actualSizeInBytes ?? volume.sizeInBytes {
+                                        Text("Used: \(formatBytes(size))")
+                                            .font(.caption)
+                                            .foregroundStyle(.secondary)
+                                    }
+                                }
+                                Spacer()
+                                Button(role: .destructive, action: {
+                                    volumeToDelete = volume.name
+                                }) {
+                                    Label("Delete", systemImage: "trash")
+                                }
+                                .buttonStyle(.plain)
+                                .padding(.horizontal, 10)
+                                .padding(.vertical, 6)
+                                .background(Color.red.opacity(0.1))
+                                .foregroundStyle(.red)
+                                .clipShape(Capsule())
                             }
-                            if let size = volume.actualSizeInBytes ?? volume.sizeInBytes {
-                                Text("Used: \(formatBytes(size))")
-                                    .font(.caption)
-                                    .foregroundStyle(.secondary)
-                            }
+                            .padding(16)
+                            .background(Color(nsColor: .controlBackgroundColor))
+                            .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+                            .shadow(color: Color.black.opacity(0.05), radius: 8, x: 0, y: 4)
                         }
-                        Spacer()
-                        Button(role: .destructive, action: {
-                            volumeToDelete = volume.name
-                        }) {
-                            Label("Delete", systemImage: "trash")
-                        }
-                        .buttonStyle(.bordered)
                     }
-                    .padding(.vertical, 4)
+                    .padding()
                 }
-                .listStyle(.inset(alternatesRowBackgrounds: true))
+                .background(Color(nsColor: .windowBackgroundColor))
+                .animation(.snappy, value: viewModel.volumes)
             }
         }
         .navigationTitle("Volumes")
