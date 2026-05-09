@@ -15,9 +15,9 @@ class ContainerLogViewModel {
     func startStreaming() {
         logs = "Starting log stream for \(containerId)...\n"
         
-        process = Process()
-        process?.executableURL = URL(fileURLWithPath: "/usr/bin/env")
-        process?.arguments = ["container", "logs", "-f", containerId]
+        let newProcess = Process.containerProcess(arguments: ["logs", "-f", containerId])
+        
+        process = newProcess
 
         logPipe = Pipe()
         process?.standardOutput = logPipe
