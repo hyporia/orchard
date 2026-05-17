@@ -10,21 +10,21 @@ struct RunContainerView: View {
     @State private var isRunning = false
     @State private var runError: String?
 
-    @State private var portRows: [String] = [""]
-    @State private var envRows: [String] = [""]
-    @State private var volumeRows: [String] = [""]
+    @State private var portsText = ""
+    @State private var envText = ""
+    @State private var volumesText = ""
 
     @State private var imageTouched = false
     @State private var nameTouched = false
     @State private var memoryTouched = false
     @State private var cpusTouched = false
-    @State private var portsTouched: [Bool] = [false]
-    @State private var envsTouched: [Bool] = [false]
-    @State private var volumesTouched: [Bool] = [false]
+    @State private var portsTouched = false
+    @State private var envsTouched = false
+    @State private var volumesTouched = false
 
     private enum Field: Hashable {
         case image, name, memory, cpus
-        case port(Int), env(Int), volume(Int)
+        case ports, envs, volumes
     }
 
     @FocusState private var focusedField: Field?
@@ -80,19 +80,21 @@ struct RunContainerView: View {
             }
             .autocorrectionDisabled()
             .focused($focusedField, equals: .image)
-            Text("Image is required.")
-                .font(.caption)
-                .foregroundStyle(.red)
-                .opacity(imageTouched && imageReference.trimmingCharacters(in: .whitespaces).isEmpty ? 1 : 0)
+            if imageTouched && imageReference.trimmingCharacters(in: .whitespaces).isEmpty {
+                Text("Image is required.")
+                    .font(.caption)
+                    .foregroundStyle(.red)
+            }
             TextField(text: $containerName, prompt: Text("cool_nginx")) {
                 Text("Name")
             }
             .autocorrectionDisabled()
             .focused($focusedField, equals: .name)
-            Text("Use letters, numbers, hyphens, and underscores only.")
-                .font(.caption)
-                .foregroundStyle(.secondary)
-                .opacity(nameTouched && !containerName.isEmpty && !isValidName(containerName) ? 1 : 0)
+            if nameTouched && !containerName.isEmpty && !isValidName(containerName) {
+                Text("Use letters, numbers, hyphens, and underscores only.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
         }
     }
 
@@ -103,168 +105,66 @@ struct RunContainerView: View {
             }
             .autocorrectionDisabled()
             .focused($focusedField, equals: .memory)
-            Text("Expected format: 512M, 1G — minimum 200M")
-                .font(.caption)
-                .foregroundStyle(.red)
-                .opacity(memoryTouched && !options.memory.isEmpty && !isValidMemory(options.memory) ? 1 : 0)
+            if memoryTouched && !options.memory.isEmpty && !isValidMemory(options.memory) {
+                Text("Expected format: 512M, 1G — minimum 200M")
+                    .font(.caption)
+                    .foregroundStyle(.red)
+            }
             TextField(text: $options.cpus, prompt: Text("2")) {
                 Text("CPUs")
             }
             .autocorrectionDisabled()
             .focused($focusedField, equals: .cpus)
-            Text("Expected a positive number")
-                .font(.caption)
-                .foregroundStyle(.secondary)
-                .opacity(cpusTouched && !options.cpus.isEmpty && !isValidCpus(options.cpus) ? 1 : 0)
+            if cpusTouched && !options.cpus.isEmpty && !isValidCpus(options.cpus) {
+                Text("Expected a positive number")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
         }
     }
 
     private var portsSection: some View {
-        Section {
-            ForEach(portRows.indices, id: \.self) { i in
-                portRow(at: i)
+        Section("Port Mappings") {
+            TextField(text: $portsText, prompt: Text("8080:80, 443:443")) {
+                Text("Ports")
             }
-            Button {
-                portRows.append("")
-                portsTouched.append(false)
-            } label: {
-                Label("Add Port", systemImage: "plus")
-            }
-            .buttonStyle(.borderless)
-            .foregroundStyle(Color.accentColor)
-        } header: {
-            Text("Port Mappings")
-        }
-    }
-
-    private func portRow(at i: Int) -> some View {
-        let invalid = portsTouched.indices.contains(i) && portsTouched[i]
-            && !portRows[i].trimmingCharacters(in: .whitespaces).isEmpty
-            && !isValidPort(portRows[i])
-        return LabeledContent {
-            HStack(spacing: 8) {
-                TextField("", text: $portRows[i], prompt: Text("8080:80"))
-                    .autocorrectionDisabled()
-                    .focused($focusedField, equals: .port(i))
-                    .overlay {
-                        if invalid {
-                            RoundedRectangle(cornerRadius: 4).stroke(Color.red, lineWidth: 1)
-                        }
-                    }
-                Image(systemName: "exclamationmark.triangle")
+            .autocorrectionDisabled()
+            .focused($focusedField, equals: .ports)
+            if portsTouched && hasInvalidPorts {
+                Text("Expected format: hostPort:containerPort, e.g. 8080:80")
+                    .font(.caption)
                     .foregroundStyle(.red)
-                    .help("Expected format: hostPort:containerPort, e.g. 8080:80")
-                    .opacity(invalid ? 1 : 0)
-                if portRows.count > 1 {
-                    Button(role: .destructive) {
-                        portRows.remove(at: i)
-                        portsTouched.remove(at: i)
-                    } label: {
-                        Image(systemName: "minus.circle.fill")
-                    }
-                    .buttonStyle(.borderless)
-                }
             }
-        } label: {
-            Text("Port")
         }
     }
 
     private var envSection: some View {
         Section("Environment Variables") {
-            ForEach(envRows.indices, id: \.self) { i in
-                envRow(at: i)
+            TextField(text: $envText, prompt: Text("DEBUG=true, PORT=8080")) {
+                Text("Variables")
             }
-            Button {
-                envRows.append("")
-                envsTouched.append(false)
-            } label: {
-                Label("Add Variable", systemImage: "plus")
-            }
-            .buttonStyle(.borderless)
-            .foregroundStyle(Color.accentColor)
-        }
-    }
-
-    private func envRow(at i: Int) -> some View {
-        let invalid = envsTouched.indices.contains(i) && envsTouched[i]
-            && !envRows[i].trimmingCharacters(in: .whitespaces).isEmpty
-            && !isValidEnv(envRows[i])
-        return LabeledContent {
-            HStack(spacing: 8) {
-                TextField("", text: $envRows[i], prompt: Text("DEBUG=true"))
-                    .autocorrectionDisabled()
-                    .focused($focusedField, equals: .env(i))
-                    .overlay {
-                        if invalid {
-                            RoundedRectangle(cornerRadius: 4).stroke(Color.red, lineWidth: 1)
-                        }
-                    }
-                Image(systemName: "exclamationmark.triangle")
+            .autocorrectionDisabled()
+            .focused($focusedField, equals: .envs)
+            if envsTouched && hasInvalidEnvs {
+                Text("Expected format: KEY=value, e.g. DEBUG=true")
+                    .font(.caption)
                     .foregroundStyle(.red)
-                    .help("Expected format: KEY=value")
-                    .opacity(invalid ? 1 : 0)
-                if envRows.count > 1 {
-                    Button(role: .destructive) {
-                        envRows.remove(at: i)
-                        envsTouched.remove(at: i)
-                    } label: {
-                        Image(systemName: "minus.circle.fill")
-                    }
-                    .buttonStyle(.borderless)
-                }
             }
-        } label: {
-            Text("Variable")
         }
     }
 
     private var volumesSection: some View {
         Section("Volumes") {
-            ForEach(volumeRows.indices, id: \.self) { i in
-                volumeRow(at: i)
+            TextField(text: $volumesText, prompt: Text("/data:/data, /config:/config")) {
+                Text("Volumes")
             }
-            Button {
-                volumeRows.append("")
-                volumesTouched.append(false)
-            } label: {
-                Label("Add Volume", systemImage: "plus")
-            }
-            .buttonStyle(.borderless)
-            .foregroundStyle(Color.accentColor)
-        }
-    }
-
-    private func volumeRow(at i: Int) -> some View {
-        let invalid = volumesTouched.indices.contains(i) && volumesTouched[i]
-            && !volumeRows[i].trimmingCharacters(in: .whitespaces).isEmpty
-            && !isValidVolume(volumeRows[i])
-        return LabeledContent {
-            HStack(spacing: 8) {
-                TextField("", text: $volumeRows[i], prompt: Text("/data:/data"))
-                    .autocorrectionDisabled()
-                    .focused($focusedField, equals: .volume(i))
-                    .overlay {
-                        if invalid {
-                            RoundedRectangle(cornerRadius: 4).stroke(Color.red, lineWidth: 1)
-                        }
-                    }
-                Image(systemName: "exclamationmark.triangle")
+            .autocorrectionDisabled()
+            .focused($focusedField, equals: .volumes)
+            if volumesTouched && hasInvalidVolumes {
+                Text("Expected format: hostPath:containerPath, e.g. /data:/data")
+                    .font(.caption)
                     .foregroundStyle(.red)
-                    .help("Expected format: hostPath:containerPath, e.g. /data:/data")
-                    .opacity(invalid ? 1 : 0)
-                if volumeRows.count > 1 {
-                    Button(role: .destructive) {
-                        volumeRows.remove(at: i)
-                        volumesTouched.remove(at: i)
-                    } label: {
-                        Image(systemName: "minus.circle.fill")
-                    }
-                    .buttonStyle(.borderless)
-                }
             }
-        } label: {
-            Text("Volume")
         }
     }
 
@@ -274,20 +174,43 @@ struct RunContainerView: View {
         }
     }
 
+    // MARK: - Validation helpers
+
+    private var hasInvalidPorts: Bool {
+        portsText.split(separator: ",")
+            .map { $0.trimmingCharacters(in: .whitespaces) }
+            .filter { !$0.isEmpty }
+            .contains { !isValidPort($0) }
+    }
+
+    private var hasInvalidEnvs: Bool {
+        envText.split(separator: ",")
+            .map { $0.trimmingCharacters(in: .whitespaces) }
+            .filter { !$0.isEmpty }
+            .contains { !isValidEnv($0) }
+    }
+
+    private var hasInvalidVolumes: Bool {
+        volumesText.split(separator: ",")
+            .map { $0.trimmingCharacters(in: .whitespaces) }
+            .filter { !$0.isEmpty }
+            .contains { !isValidVolume($0) }
+    }
+
     // MARK: - Action
 
     private func run() {
         let image = imageReference.trimmingCharacters(in: .whitespaces)
         let name = containerName.trimmingCharacters(in: .whitespaces)
-        options.ports = portRows.map { $0.trimmingCharacters(in: .whitespaces) }.filter {
-            !$0.isEmpty
-        }
-        options.envVars = envRows.map { $0.trimmingCharacters(in: .whitespaces) }.filter {
-            !$0.isEmpty
-        }
-        options.volumes = volumeRows.map { $0.trimmingCharacters(in: .whitespaces) }.filter {
-            !$0.isEmpty
-        }
+        options.ports = portsText.split(separator: ",")
+            .map { $0.trimmingCharacters(in: .whitespaces) }
+            .filter { !$0.isEmpty }
+        options.envVars = envText.split(separator: ",")
+            .map { $0.trimmingCharacters(in: .whitespaces) }
+            .filter { !$0.isEmpty }
+        options.volumes = volumesText.split(separator: ",")
+            .map { $0.trimmingCharacters(in: .whitespaces) }
+            .filter { !$0.isEmpty }
         runError = nil
         isRunning = true
         Task {
@@ -309,9 +232,9 @@ struct RunContainerView: View {
         case .name: nameTouched = true
         case .memory: memoryTouched = true
         case .cpus: cpusTouched = true
-        case .port(let i): if portsTouched.indices.contains(i) { portsTouched[i] = true }
-        case .env(let i): if envsTouched.indices.contains(i) { envsTouched[i] = true }
-        case .volume(let i): if volumesTouched.indices.contains(i) { volumesTouched[i] = true }
+        case .ports: portsTouched = true
+        case .envs: envsTouched = true
+        case .volumes: volumesTouched = true
         case nil: break
         }
     }
