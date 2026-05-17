@@ -15,7 +15,13 @@ class ContainerLogViewModel {
     func startStreaming() {
         logs = "Starting log stream for \(containerId)...\n"
         
-        let newProcess = Process.containerProcess(arguments: ["logs", "-f", containerId])
+        let newProcess: Process
+        do {
+            newProcess = try Process.containerProcess(arguments: ["logs", "-f", containerId])
+        } catch {
+            logs.append("\nError starting process: \(error.localizedDescription)\n")
+            return
+        }
         
         process = newProcess
 

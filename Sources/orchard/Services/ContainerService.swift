@@ -40,7 +40,7 @@ struct CLIContainerService: ContainerServiceProtocol {
         try await withCheckedThrowingContinuation { continuation in
             DispatchQueue.global(qos: .userInitiated).async {
                 do {
-                    let process = Process.containerProcess(arguments: arguments)
+                    let process = try Process.containerProcess(arguments: arguments)
                     
                     let stdoutPipe = Pipe()
                     let stderrPipe = Pipe()
