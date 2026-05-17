@@ -28,11 +28,11 @@ protocol ContainerServiceProtocol: Sendable {
 }
 
 struct RunContainerOptions {
-    var memory: String = ""          // e.g. "512M", "1G"
-    var cpus: String = ""            // e.g. "2"
-    var ports: [String] = []         // e.g. ["8080:80"]
-    var envVars: [String] = []       // e.g. ["FOO=bar"]
-    var volumes: [String] = []       // e.g. ["/host:/container"]
+    var memory: String = ""  // e.g. "512M", "1G"
+    var cpus: String = ""  // e.g. "2"
+    var ports: [String] = []  // e.g. ["8080:80"]
+    var envVars: [String] = []  // e.g. ["FOO=bar"]
+    var volumes: [String] = []  // e.g. ["/host:/container"]
     var removeOnStop: Bool = false
     var entrypoint: String = ""
 }
@@ -49,36 +49,102 @@ enum ContainerServiceError: Error, LocalizedError {
     }
 }
 
+private final class DataBox: @unchecked Sendable {
+    var data = Data()
+}
+
+private final class CommandState: @unchecked Sendable {
+    private let lock = NSLock()
+    private var process: Process?
+    private var cancelled = false
+    private var resumed = false
+
+    func attach(_ process: Process) {
+        lock.lock()
+        self.process = process
+        let alreadyCancelled = cancelled
+        lock.unlock()
+        if alreadyCancelled { process.terminate() }
+    }
+
+    func cancel() {
+        lock.lock()
+        cancelled = true
+        let process = self.process
+        lock.unlock()
+        process?.terminate()
+    }
+
+    func claimCompletion() -> Bool {
+        lock.lock()
+        defer { lock.unlock() }
+        if resumed { return false }
+        resumed = true
+        return true
+    }
+}
+
 struct CLIContainerService: ContainerServiceProtocol {
     private func runCommand(arguments: [String]) async throws -> String {
-        try await withCheckedThrowingContinuation { continuation in
-            DispatchQueue.global(qos: .userInitiated).async {
-                do {
-                    let process = try Process.containerProcess(arguments: arguments)
+        let state = CommandState()
+        return try await withTaskCancellationHandler {
+            try await withCheckedThrowingContinuation {
+                (continuation: CheckedContinuation<String, Error>) in
+                DispatchQueue.global(qos: .userInitiated).async {
+                    do {
+                        let process = try Process.containerProcess(arguments: arguments)
+                        state.attach(process)
 
-                    let stdoutPipe = Pipe()
-                    let stderrPipe = Pipe()
-                    process.standardOutput = stdoutPipe
-                    process.standardError = stderrPipe
+                        let stdoutPipe = Pipe()
+                        let stderrPipe = Pipe()
+                        process.standardOutput = stdoutPipe
+                        process.standardError = stderrPipe
 
-                    try process.run()
-                    process.waitUntilExit()
+                        try process.run()
 
-                    let stdoutData = stdoutPipe.fileHandleForReading.readDataToEndOfFile()
-                    let stderrData = stderrPipe.fileHandleForReading.readDataToEndOfFile()
+                        let stdoutBox = DataBox()
+                        let stderrBox = DataBox()
+                        let ioQueue = DispatchQueue(
+                            label: "orchard.process.io", attributes: .concurrent)
+                        let ioGroup = DispatchGroup()
 
-                    if process.terminationStatus != 0 {
-                        let errorMsg = String(data: stderrData, encoding: .utf8) ?? "Unknown error"
-                        continuation.resume(throwing: ContainerServiceError.processFailed(errorMsg))
-                        return
+                        ioGroup.enter()
+                        ioQueue.async {
+                            stdoutBox.data =
+                                stdoutPipe.fileHandleForReading.readDataToEndOfFile()
+                            ioGroup.leave()
+                        }
+                        ioGroup.enter()
+                        ioQueue.async {
+                            stderrBox.data =
+                                stderrPipe.fileHandleForReading.readDataToEndOfFile()
+                            ioGroup.leave()
+                        }
+
+                        process.waitUntilExit()
+                        ioGroup.wait()
+
+                        guard state.claimCompletion() else { return }
+
+                        let stdoutData = stdoutBox.data
+                        let stderrData = stderrBox.data
+
+                        if process.terminationStatus != 0 {
+                            let errorMsg = String(data: stderrData, encoding: .utf8) ?? "Unknown error"
+                            continuation.resume(throwing: ContainerServiceError.processFailed(errorMsg))
+                            return
+                        }
+
+                        let output = String(data: stdoutData, encoding: .utf8) ?? ""
+                        continuation.resume(returning: output)
+                    } catch {
+                        guard state.claimCompletion() else { return }
+                        continuation.resume(throwing: error)
                     }
-
-                    let output = String(data: stdoutData, encoding: .utf8) ?? ""
-                    continuation.resume(returning: output)
-                } catch {
-                    continuation.resume(throwing: error)
                 }
             }
+        } onCancel: {
+            state.cancel()
         }
     }
 
@@ -154,7 +220,9 @@ struct CLIContainerService: ContainerServiceProtocol {
     func getSystemStatus() async throws -> SystemStatus {
         do {
             let output = try await runCommand(arguments: ["system", "status", "--format", "json"])
-            guard let data = output.data(using: .utf8) else { throw ContainerServiceError.decodingFailed }
+            guard let data = output.data(using: .utf8) else {
+                throw ContainerServiceError.decodingFailed
+            }
             return try JSONDecoder().decode(SystemStatus.self, from: data)
         } catch {
             return SystemStatus(status: "stopped", apiServerVersion: nil)
@@ -163,7 +231,9 @@ struct CLIContainerService: ContainerServiceProtocol {
 
     func getSystemDiskUsage() async throws -> SystemDiskUsage {
         let output = try await runCommand(arguments: ["system", "df", "--format", "json"])
-        guard let data = output.data(using: .utf8) else { throw ContainerServiceError.decodingFailed }
+        guard let data = output.data(using: .utf8) else {
+            throw ContainerServiceError.decodingFailed
+        }
         return try JSONDecoder().decode(SystemDiskUsage.self, from: data)
     }
 
@@ -202,8 +272,11 @@ struct CLIContainerService: ContainerServiceProtocol {
         for i in volumes.indices {
             if let source = volumes[i].source {
                 let url = URL(fileURLWithPath: source)
-                if let resourceValues = try? url.resourceValues(forKeys: [.totalFileAllocatedSizeKey]),
-                   let allocatedSize = resourceValues.totalFileAllocatedSize {
+                if let resourceValues = try? url.resourceValues(forKeys: [
+                    .totalFileAllocatedSizeKey
+                ]),
+                    let allocatedSize = resourceValues.totalFileAllocatedSize
+                {
                     volumes[i].actualSizeInBytes = Int64(allocatedSize)
                 }
             }
@@ -225,7 +298,9 @@ struct MockContainerService: ContainerServiceProtocol {
     func deleteContainer(id: String) async throws {}
     func runContainer(image: String, name: String?, options: RunContainerOptions) async throws {}
 
-    func getSystemStatus() async throws -> SystemStatus { SystemStatus(status: "running", apiServerVersion: "mock") }
+    func getSystemStatus() async throws -> SystemStatus {
+        SystemStatus(status: "running", apiServerVersion: "mock")
+    }
     func getSystemDiskUsage() async throws -> SystemDiskUsage {
         let stat = SystemDiskUsage.UsageStat(active: 1, reclaimable: 1, sizeInBytes: 1, total: 1)
         return SystemDiskUsage(containers: stat, images: stat, volumes: stat)

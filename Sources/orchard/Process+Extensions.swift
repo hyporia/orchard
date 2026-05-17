@@ -83,6 +83,8 @@ extension Process {
         let process = Process()
         process.executableURL = executableURL
         process.arguments = arguments
+
+        process.standardInput = FileHandle.nullDevice
         
         // Pass standard environment but make sure typical paths are there
         var env = ProcessInfo.processInfo.environment

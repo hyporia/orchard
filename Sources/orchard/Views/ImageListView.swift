@@ -159,6 +159,7 @@ struct PullImageSheet: View {
     var viewModel: ImageViewModel
     @Environment(\.dismiss) private var dismiss
     @State private var reference = ""
+    @State private var pullTask: Task<Void, Never>?
 
     var body: some View {
         NavigationStack {
@@ -166,18 +167,23 @@ struct PullImageSheet: View {
                 Section("Image Reference") {
                     TextField("e.g. docker.io/nginx:latest", text: $reference)
                         .autocorrectionDisabled()
+                        .disabled(viewModel.isPulling)
                 }
             }
             .navigationTitle("Pull Image")
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancel") { dismiss() }
+                    Button("Cancel") {
+                        pullTask?.cancel()
+                        dismiss()
+                    }
                 }
                 ToolbarItem(placement: .confirmationAction) {
                     Button(action: {
-                        Task {
-                            await viewModel.pull(reference: reference.trimmingCharacters(in: .whitespaces))
-                            dismiss()
+                        let ref = reference.trimmingCharacters(in: .whitespaces)
+                        pullTask = Task {
+                            await viewModel.pull(reference: ref)
+                            if !Task.isCancelled { dismiss() }
                         }
                     }) {
                         if viewModel.isPulling {
@@ -191,5 +197,6 @@ struct PullImageSheet: View {
             }
         }
         .frame(minWidth: 400, minHeight: 150)
+        .onDisappear { pullTask?.cancel() }
     }
 }

@@ -58,12 +58,14 @@ class ImageViewModel {
     func pull(reference: String) async {
         isPulling = true
         errorMessage = nil
+        defer { isPulling = false }
         do {
             try await service.pullImage(reference: reference)
             await fetchImages()
         } catch {
-            errorMessage = error.localizedDescription
+            if !Task.isCancelled {
+                errorMessage = error.localizedDescription
+            }
         }
-        isPulling = false
     }
 }

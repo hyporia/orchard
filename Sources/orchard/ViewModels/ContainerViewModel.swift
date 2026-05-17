@@ -110,6 +110,10 @@ class ContainerViewModel {
 
     func delete(containerId: String) async {
         do {
+            if let container = containers.first(where: { $0.id == containerId }),
+               container.state == "running" {
+                try await service.stopContainer(id: containerId)
+            }
             try await service.deleteContainer(id: containerId)
             await fetchContainers()
         } catch {
