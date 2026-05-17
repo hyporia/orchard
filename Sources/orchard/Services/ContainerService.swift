@@ -6,27 +6,41 @@ protocol ContainerServiceProtocol: Sendable {
     func startContainer(id: String) async throws
     func stopContainer(id: String) async throws
     func deleteContainer(id: String) async throws
-    
+
     // System methods
     func getSystemStatus() async throws -> SystemStatus
     func getSystemDiskUsage() async throws -> SystemDiskUsage
     func getCliVersion() async throws -> String
     func startSystem() async throws
     func stopSystem() async throws
-    
+
     // Images
     func fetchImages() async throws -> [ImageItem]
     func deleteImage(reference: String) async throws
-    
+    func pullImage(reference: String) async throws
+
     // Volumes
     func fetchVolumes() async throws -> [VolumeItem]
     func deleteVolume(name: String) async throws
+
+    // Container lifecycle
+    func runContainer(image: String, name: String?, options: RunContainerOptions) async throws
+}
+
+struct RunContainerOptions {
+    var memory: String = ""          // e.g. "512M", "1G"
+    var cpus: String = ""            // e.g. "2"
+    var ports: [String] = []         // e.g. ["8080:80"]
+    var envVars: [String] = []       // e.g. ["FOO=bar"]
+    var volumes: [String] = []       // e.g. ["/host:/container"]
+    var removeOnStop: Bool = false
+    var entrypoint: String = ""
 }
 
 enum ContainerServiceError: Error, LocalizedError {
     case processFailed(String)
     case decodingFailed
-    
+
     var errorDescription: String? {
         switch self {
         case .processFailed(let msg): return "Container process failed: \(msg)"
@@ -41,24 +55,24 @@ struct CLIContainerService: ContainerServiceProtocol {
             DispatchQueue.global(qos: .userInitiated).async {
                 do {
                     let process = try Process.containerProcess(arguments: arguments)
-                    
+
                     let stdoutPipe = Pipe()
                     let stderrPipe = Pipe()
                     process.standardOutput = stdoutPipe
                     process.standardError = stderrPipe
-                    
+
                     try process.run()
                     process.waitUntilExit()
-                    
+
                     let stdoutData = stdoutPipe.fileHandleForReading.readDataToEndOfFile()
                     let stderrData = stderrPipe.fileHandleForReading.readDataToEndOfFile()
-                    
+
                     if process.terminationStatus != 0 {
                         let errorMsg = String(data: stderrData, encoding: .utf8) ?? "Unknown error"
                         continuation.resume(throwing: ContainerServiceError.processFailed(errorMsg))
                         return
                     }
-                    
+
                     let output = String(data: stdoutData, encoding: .utf8) ?? ""
                     continuation.resume(returning: output)
                 } catch {
@@ -73,13 +87,11 @@ struct CLIContainerService: ContainerServiceProtocol {
         guard let data = output.data(using: .utf8) else {
             throw ContainerServiceError.decodingFailed
         }
-        
+
         let decoder = JSONDecoder()
-        // Try decoding as a JSON array first
         do {
             return try decoder.decode([ContainerItem].self, from: data)
         } catch {
-            // Fallback: some CLI versions emit one JSON object per line
             let lines = output.components(separatedBy: .newlines)
                 .filter { !$0.trimmingCharacters(in: .whitespaces).isEmpty }
             var items: [ContainerItem] = []
@@ -109,13 +121,42 @@ struct CLIContainerService: ContainerServiceProtocol {
         _ = try await runCommand(arguments: ["rm", id])
     }
 
+    func runContainer(image: String, name: String?, options: RunContainerOptions) async throws {
+        var args = ["run", "-d"]
+        if let name = name, !name.isEmpty {
+            args += ["--name", name]
+        }
+        if !options.memory.isEmpty {
+            args += ["--memory", options.memory]
+        }
+        if !options.cpus.isEmpty {
+            args += ["--cpus", options.cpus]
+        }
+        for port in options.ports where !port.isEmpty {
+            args += ["--publish", port]
+        }
+        for env in options.envVars where !env.isEmpty {
+            args += ["--env", env]
+        }
+        for vol in options.volumes where !vol.isEmpty {
+            args += ["--volume", vol]
+        }
+        if options.removeOnStop {
+            args.append("--rm")
+        }
+        if !options.entrypoint.isEmpty {
+            args += ["--entrypoint", options.entrypoint]
+        }
+        args.append(image)
+        _ = try await runCommand(arguments: args)
+    }
+
     func getSystemStatus() async throws -> SystemStatus {
         do {
             let output = try await runCommand(arguments: ["system", "status", "--format", "json"])
             guard let data = output.data(using: .utf8) else { throw ContainerServiceError.decodingFailed }
             return try JSONDecoder().decode(SystemStatus.self, from: data)
         } catch {
-            // If it fails, the daemon might not be running. Return a stopped status
             return SystemStatus(status: "stopped", apiServerVersion: nil)
         }
     }
@@ -134,28 +175,30 @@ struct CLIContainerService: ContainerServiceProtocol {
     func startSystem() async throws {
         _ = try await runCommand(arguments: ["system", "start"])
     }
-    
+
     func stopSystem() async throws {
         _ = try await runCommand(arguments: ["system", "stop"])
     }
-    
-    // Images
+
     func fetchImages() async throws -> [ImageItem] {
         let output = try await runCommand(arguments: ["image", "ls", "--format", "json"])
         guard let data = output.data(using: .utf8) else { return [] }
         return try JSONDecoder().decode([ImageItem].self, from: data)
     }
+
     func deleteImage(reference: String) async throws {
         _ = try await runCommand(arguments: ["image", "rm", reference])
     }
-    
-    // Volumes
+
+    func pullImage(reference: String) async throws {
+        _ = try await runCommand(arguments: ["image", "pull", reference])
+    }
+
     func fetchVolumes() async throws -> [VolumeItem] {
         let output = try await runCommand(arguments: ["volume", "ls", "--format", "json"])
         guard let data = output.data(using: .utf8) else { return [] }
         var volumes = try JSONDecoder().decode([VolumeItem].self, from: data)
-        
-        // Compute actual on-disk size for sparse volume images
+
         for i in volumes.indices {
             if let source = volumes[i].source {
                 let url = URL(fileURLWithPath: source)
@@ -165,33 +208,36 @@ struct CLIContainerService: ContainerServiceProtocol {
                 }
             }
         }
-        
+
         return volumes
     }
+
     func deleteVolume(name: String) async throws {
         _ = try await runCommand(arguments: ["volume", "rm", name])
     }
 }
 
 struct MockContainerService: ContainerServiceProtocol {
-    func fetchContainers() async throws -> [ContainerItem] { return [] }
-    func fetchStats() async throws -> [ContainerStat] { return [] }
+    func fetchContainers() async throws -> [ContainerItem] { [] }
+    func fetchStats() async throws -> [ContainerStat] { [] }
     func startContainer(id: String) async throws {}
     func stopContainer(id: String) async throws {}
     func deleteContainer(id: String) async throws {}
-    
-    func getSystemStatus() async throws -> SystemStatus { return SystemStatus(status: "running", apiServerVersion: "mock") }
-    func getSystemDiskUsage() async throws -> SystemDiskUsage { 
+    func runContainer(image: String, name: String?, options: RunContainerOptions) async throws {}
+
+    func getSystemStatus() async throws -> SystemStatus { SystemStatus(status: "running", apiServerVersion: "mock") }
+    func getSystemDiskUsage() async throws -> SystemDiskUsage {
         let stat = SystemDiskUsage.UsageStat(active: 1, reclaimable: 1, sizeInBytes: 1, total: 1)
-        return SystemDiskUsage(containers: stat, images: stat, volumes: stat) 
+        return SystemDiskUsage(containers: stat, images: stat, volumes: stat)
     }
-    func getCliVersion() async throws -> String { return "mock" }
+    func getCliVersion() async throws -> String { "mock" }
     func startSystem() async throws {}
     func stopSystem() async throws {}
-    
-    func fetchImages() async throws -> [ImageItem] { return [] }
+
+    func fetchImages() async throws -> [ImageItem] { [] }
     func deleteImage(reference: String) async throws {}
-    
-    func fetchVolumes() async throws -> [VolumeItem] { return [] }
+    func pullImage(reference: String) async throws {}
+
+    func fetchVolumes() async throws -> [VolumeItem] { [] }
     func deleteVolume(name: String) async throws {}
 }

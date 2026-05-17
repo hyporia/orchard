@@ -7,7 +7,7 @@ struct ContentView: View {
     @State private var imageViewModel: ImageViewModel
     @State private var volumeViewModel: VolumeViewModel
     @State private var selection: String? = "system"
-    
+
     init(service: ContainerServiceProtocol = CLIContainerService()) {
         self.service = service
         self._systemViewModel = State(initialValue: SystemViewModel(service: service))
@@ -15,11 +15,11 @@ struct ContentView: View {
         self._imageViewModel = State(initialValue: ImageViewModel(service: service))
         self._volumeViewModel = State(initialValue: VolumeViewModel(service: service))
     }
-    
+
     var isSystemRunning: Bool {
         systemViewModel.systemInfo?.isRunning == true
     }
-    
+
     var body: some View {
         NavigationSplitView {
             List(selection: $selection) {
@@ -27,11 +27,11 @@ struct ContentView: View {
                     Label {
                         Text("System")
                     } icon: {
-                        Image(systemName: "desktopcomputer")
+                        Image(systemName: "cpu")
                             .foregroundStyle(.blue)
                     }
                 }
-                
+
                 Section("Management") {
                     NavigationLink(value: "containers") {
                         Label {
@@ -42,17 +42,19 @@ struct ContentView: View {
                         }
                     }
                     .disabled(!isSystemRunning)
-                    
+                    .help(isSystemRunning ? "" : "Start the system daemon to manage containers")
+
                     NavigationLink(value: "images") {
                         Label {
                             Text("Images")
                         } icon: {
-                            Image(systemName: "photo.fill")
+                            Image(systemName: "cube.box.fill")
                                 .foregroundStyle(.purple)
                         }
                     }
                     .disabled(!isSystemRunning)
-                    
+                    .help(isSystemRunning ? "" : "Start the system daemon to manage images")
+
                     NavigationLink(value: "volumes") {
                         Label {
                             Text("Volumes")
@@ -62,6 +64,7 @@ struct ContentView: View {
                         }
                     }
                     .disabled(!isSystemRunning)
+                    .help(isSystemRunning ? "" : "Start the system daemon to manage volumes")
                 }
             }
             .navigationTitle("Orchard")
@@ -84,10 +87,20 @@ struct ContentView: View {
 
 struct ContainerListView: View {
     var viewModel: ContainerViewModel
-    
+    @State private var searchText = ""
+    @State private var showRunContainer = false
+
+    var filteredContainers: [ContainerItem] {
+        guard !searchText.isEmpty else { return viewModel.containers }
+        return viewModel.containers.filter {
+            $0.names.localizedCaseInsensitiveContains(searchText) ||
+            $0.image.localizedCaseInsensitiveContains(searchText)
+        }
+    }
+
     var body: some View {
         VStack {
-            if viewModel.isLoading {
+            if viewModel.isLoading && viewModel.containers.isEmpty {
                 ProgressView("Loading Containers...")
                     .padding()
             } else if viewModel.containers.isEmpty {
@@ -99,7 +112,7 @@ struct ContainerListView: View {
             } else {
                 ScrollView {
                     LazyVStack(spacing: 12) {
-                        ForEach(viewModel.containers) { container in
+                        ForEach(filteredContainers) { container in
                             ContainerRow(container: container, viewModel: viewModel)
                         }
                     }
@@ -107,9 +120,15 @@ struct ContainerListView: View {
                 }
                 .background(Color(nsColor: .windowBackgroundColor))
                 .animation(.snappy, value: viewModel.containers)
+                .overlay {
+                    if filteredContainers.isEmpty {
+                        ContentUnavailableView.search(text: searchText)
+                    }
+                }
             }
         }
         .navigationTitle("Containers")
+        .searchable(text: $searchText, prompt: "Search containers")
         .toolbar {
             ToolbarItem(placement: .primaryAction) {
                 Button(action: {
@@ -118,11 +137,14 @@ struct ContainerListView: View {
                     Label("Refresh", systemImage: "arrow.clockwise")
                 }
             }
+            ToolbarItem(placement: .primaryAction) {
+                Button(action: { showRunContainer = true }) {
+                    Label("Run Container", systemImage: "plus")
+                }
+            }
         }
         .onAppear {
-            Task {
-                await viewModel.fetchContainers()
-            }
+            Task { await viewModel.fetchContainers() }
             viewModel.startPolling()
         }
         .onDisappear {
@@ -139,7 +161,8 @@ struct ContainerListView: View {
         } message: {
             Text(viewModel.errorMessage ?? "")
         }
+        .sheet(isPresented: $showRunContainer) {
+            RunContainerView(viewModel: viewModel)
+        }
     }
 }
-
-

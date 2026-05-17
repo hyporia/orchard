@@ -3,36 +3,44 @@ import SwiftUI
 struct ContainerRow: View {
     let container: ContainerItem
     var viewModel: ContainerViewModel
-    
+
     var isRunning: Bool {
         container.state.lowercased() == "running"
     }
-    
+
     @State private var showingLogs = false
     @State private var showDeleteConfirmation = false
     @State private var isProcessing = false
-    
+
     var body: some View {
         HStack {
             Circle()
                 .fill(isRunning ? Color.green : Color.red)
                 .frame(width: 10, height: 10)
-            
+
             VStack(alignment: .leading, spacing: 4) {
-                Text(container.names.isEmpty ? container.id : container.names)
+                Text(container.names)
                     .font(.headline)
+                    .textSelection(.enabled)
                 Text(container.image)
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
-                
+                    .textSelection(.enabled)
+
                 if isRunning, let stat = viewModel.stats[container.id] {
                     HStack(spacing: 12) {
-                        Label(formatCPU(stat.cpuUsageUsec), systemImage: "cpu")
+                        let cpuText = viewModel.cpuPercent[container.id].map {
+                            String(format: "%.1f%%", $0)
+                        } ?? "—"
+                        Label(cpuText, systemImage: "cpu")
                             .font(.caption)
-                            .foregroundStyle(.blue)
-                        Label(formatMemory(stat.memoryUsageBytes), systemImage: "memorychip")
-                            .font(.caption)
-                            .foregroundStyle(.purple)
+                            .foregroundStyle(viewModel.cpuPercent[container.id] != nil ? AnyShapeStyle(.blue) : AnyShapeStyle(.secondary))
+
+                        if let usage = stat.memoryUsageBytes {
+                            Label(memoryLabel(usage: usage, limit: stat.memoryLimitBytes), systemImage: "memorychip")
+                                .font(.caption)
+                                .foregroundStyle(.purple)
+                        }
                     }
                 } else {
                     Text(container.status)
@@ -40,12 +48,10 @@ struct ContainerRow: View {
                         .foregroundStyle(.secondary)
                 }
             }
-            
+
             Spacer()
-            
-            Button(action: {
-                showingLogs = true
-            }) {
+
+            Button(action: { showingLogs = true }) {
                 Label("Logs", systemImage: "text.alignleft")
             }
             .buttonStyle(.plain)
@@ -53,7 +59,7 @@ struct ContainerRow: View {
             .padding(.vertical, 6)
             .background(Color.secondary.opacity(0.1))
             .clipShape(Capsule())
-            
+
             if isRunning {
                 Button(action: {
                     Task {
@@ -73,6 +79,23 @@ struct ContainerRow: View {
                 .padding(.vertical, 6)
                 .background(Color.orange.opacity(0.1))
                 .foregroundStyle(.orange)
+                .clipShape(Capsule())
+                .disabled(isProcessing)
+
+                Button(action: {
+                    Task {
+                        withAnimation(.snappy) { isProcessing = true }
+                        await viewModel.restart(containerId: container.id)
+                        withAnimation(.snappy) { isProcessing = false }
+                    }
+                }) {
+                    Label("Restart", systemImage: "arrow.clockwise")
+                }
+                .buttonStyle(.plain)
+                .padding(.horizontal, 10)
+                .padding(.vertical, 6)
+                .background(Color.blue.opacity(0.1))
+                .foregroundStyle(.blue)
                 .clipShape(Capsule())
                 .disabled(isProcessing)
             } else {
@@ -97,7 +120,7 @@ struct ContainerRow: View {
                 .clipShape(Capsule())
                 .disabled(isProcessing)
             }
-            
+
             Button(role: .destructive, action: {
                 showDeleteConfirmation = true
             }) {
@@ -128,22 +151,24 @@ struct ContainerRow: View {
         .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
         .shadow(color: Color.black.opacity(0.05), radius: 8, x: 0, y: 4)
         .sheet(isPresented: $showingLogs) {
-            ContainerLogView(containerId: container.id)
+            ContainerLogView(containerId: container.id, containerName: container.names)
                 .frame(minWidth: 500, minHeight: 400)
         }
     }
-    
-    private func formatCPU(_ usec: Int64?) -> String {
-        guard let usec = usec else { return "0%" }
-        // Very basic CPU conversion, usually usec requires delta calculation.
-        // We will just show a static placeholder or basic calculation if delta isn't available.
-        // Alternatively, displaying usec directly or just an active indicator:
-        return "\(usec / 100_000)%"
+
+    private func memoryLabel(usage: Int64, limit: Int64?) -> String {
+        let usageStr = formatBytes(usage)
+        if let limit = limit, limit > 0 {
+            return "\(usageStr) / \(formatBytes(limit))"
+        }
+        return usageStr
     }
-    
-    private func formatMemory(_ bytes: Int64?) -> String {
-        guard let bytes = bytes else { return "0 MB" }
+
+    private func formatBytes(_ bytes: Int64) -> String {
         let mb = Double(bytes) / 1_000_000.0
-        return String(format: "%.2f MB", mb)
+        if mb >= 1000 {
+            return String(format: "%.1f GB", mb / 1000)
+        }
+        return String(format: "%.0f MB", mb)
     }
 }

@@ -6,14 +6,15 @@ class ImageViewModel {
     var images: [ImageItem] = []
     var activeImages: Set<String> = []
     var isLoading: Bool = false
+    var isPulling: Bool = false
     var errorMessage: String?
-    
+
     private let service: ContainerServiceProtocol
-    
+
     init(service: ContainerServiceProtocol = CLIContainerService()) {
         self.service = service
     }
-    
+
     func fetchImages() async {
         isLoading = true
         errorMessage = nil
@@ -25,12 +26,12 @@ class ImageViewModel {
                 self.isLoading = false
                 return
             }
-            
+
             async let fetchedImages = service.fetchImages()
             async let fetchedContainers = try? service.fetchContainers()
-            
+
             self.images = try await fetchedImages
-            
+
             var newActive: Set<String> = []
             if let containers = await fetchedContainers {
                 for container in containers {
@@ -38,13 +39,13 @@ class ImageViewModel {
                 }
             }
             self.activeImages = newActive
-            
+
         } catch {
             errorMessage = error.localizedDescription
         }
         isLoading = false
     }
-    
+
     func delete(reference: String) async {
         do {
             try await service.deleteImage(reference: reference)
@@ -52,5 +53,17 @@ class ImageViewModel {
         } catch {
             errorMessage = error.localizedDescription
         }
+    }
+
+    func pull(reference: String) async {
+        isPulling = true
+        errorMessage = nil
+        do {
+            try await service.pullImage(reference: reference)
+            await fetchImages()
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+        isPulling = false
     }
 }

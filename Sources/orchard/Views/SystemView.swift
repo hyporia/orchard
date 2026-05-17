@@ -2,7 +2,7 @@ import SwiftUI
 
 struct SystemView: View {
     var viewModel: SystemViewModel
-    
+
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 20) {
@@ -11,14 +11,14 @@ struct SystemView: View {
                         .frame(maxWidth: .infinity, alignment: .center)
                         .padding()
                 } else if let info = viewModel.systemInfo {
-                    
+
                     // Status Section
                     VStack(alignment: .leading, spacing: 16) {
                         Text("Status")
                             .font(.headline)
                             .foregroundStyle(.secondary)
                             .padding(.horizontal, 4)
-                        
+
                         VStack(spacing: 0) {
                             HStack {
                                 Circle()
@@ -29,9 +29,7 @@ struct SystemView: View {
                                 Spacer()
                                 if !info.isRunning {
                                     Button(action: {
-                                        Task {
-                                            await viewModel.startSystem()
-                                        }
+                                        Task { await viewModel.startSystem() }
                                     }) {
                                         if viewModel.isLoading {
                                             ProgressView().controlSize(.small).tint(.green)
@@ -48,9 +46,7 @@ struct SystemView: View {
                                     .disabled(viewModel.isLoading)
                                 } else {
                                     Button(action: {
-                                        Task {
-                                            await viewModel.stopSystem()
-                                        }
+                                        Task { await viewModel.stopSystem() }
                                     }) {
                                         if viewModel.isLoading {
                                             ProgressView().controlSize(.small).tint(.red)
@@ -68,15 +64,16 @@ struct SystemView: View {
                                 }
                             }
                             .padding()
-                            
+
                             Divider()
-                            
+
                             HStack {
                                 Text("Version")
                                     .foregroundStyle(.secondary)
                                 Spacer()
                                 Text(info.version)
                                     .font(.system(.body, design: .monospaced))
+                                    .textSelection(.enabled)
                             }
                             .padding()
                         }
@@ -84,7 +81,7 @@ struct SystemView: View {
                         .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
                         .shadow(color: Color.black.opacity(0.05), radius: 8, x: 0, y: 4)
                     }
-                    
+
                     // Disk Usage Section
                     if let df = info.diskUsage {
                         VStack(alignment: .leading, spacing: 16) {
@@ -92,7 +89,7 @@ struct SystemView: View {
                                 .font(.headline)
                                 .foregroundStyle(.secondary)
                                 .padding(.horizontal, 4)
-                                
+
                             VStack(spacing: 0) {
                                 DiskUsageRow(title: "Containers", stat: df.containers)
                                     .padding()
@@ -126,9 +123,11 @@ struct SystemView: View {
             }
         }
         .onAppear {
-            Task {
-                await viewModel.fetchSystemInfo()
-            }
+            Task { await viewModel.fetchSystemInfo() }
+            viewModel.startPolling()
+        }
+        .onDisappear {
+            viewModel.stopPolling()
         }
         .alert(
             "Error",
@@ -147,22 +146,22 @@ struct SystemView: View {
 struct DiskUsageRow: View {
     let title: String
     let stat: SystemDiskUsage.UsageStat
-    
+
     var body: some View {
         HStack {
             Text(title)
                 .font(.headline)
             Spacer()
             VStack(alignment: .trailing) {
-                Text("\(stat.active) / \(stat.total) active")
+                Text("\(stat.active) active of \(stat.total) total")
                     .font(.subheadline)
-                Text("Size: \(formatBytes(stat.sizeInBytes))")
+                Text(formatBytes(stat.sizeInBytes))
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
         }
     }
-    
+
     private func formatBytes(_ bytes: Int64) -> String {
         let formatter = ByteCountFormatter()
         formatter.allowedUnits = [.useAll]

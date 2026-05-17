@@ -7,14 +7,17 @@ class ContainerLogViewModel {
     private var process: Process?
     private var logPipe: Pipe?
     let containerId: String
+    let containerName: String?
 
-    init(containerId: String) {
+    init(containerId: String, containerName: String? = nil) {
         self.containerId = containerId
+        self.containerName = containerName
     }
 
     func startStreaming() {
-        logs = "Starting log stream for \(containerId)...\n"
-        
+        let displayName = containerName ?? containerId
+        logs = "Starting log stream for \(displayName)...\n"
+
         let newProcess: Process
         do {
             newProcess = try Process.containerProcess(arguments: ["logs", "-f", containerId])
@@ -22,12 +25,12 @@ class ContainerLogViewModel {
             logs.append("\nError starting process: \(error.localizedDescription)\n")
             return
         }
-        
+
         process = newProcess
 
         logPipe = Pipe()
         process?.standardOutput = logPipe
-        process?.standardError = logPipe // Merge stdout and stderr
+        process?.standardError = logPipe
 
         logPipe?.fileHandleForReading.readabilityHandler = { @Sendable [weak self] handle in
             let data = handle.availableData
@@ -51,7 +54,6 @@ class ContainerLogViewModel {
 
     private func appendLog(_ string: String) {
         logs.append(string)
-        // Keep memory footprint small by truncating if too large
         if logs.count > 50000 {
             logs = String(logs.suffix(40000))
         }

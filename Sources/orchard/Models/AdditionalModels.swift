@@ -16,8 +16,8 @@ struct ImageItem: Decodable, Identifiable, Sendable, Equatable {
     var id: String { reference }
     let reference: String
     let fullSize: String?
-    
-    // Optional descriptor info
+    let createdAt: String?
+
     struct Descriptor: Decodable, Sendable, Equatable {
         let size: Int64?
         let digest: String?

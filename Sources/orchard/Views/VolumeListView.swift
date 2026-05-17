@@ -3,7 +3,13 @@ import SwiftUI
 struct VolumeListView: View {
     var viewModel: VolumeViewModel
     @State private var volumeToDelete: String?
-    
+    @State private var searchText = ""
+
+    var filteredVolumes: [VolumeItem] {
+        guard !searchText.isEmpty else { return viewModel.volumes }
+        return viewModel.volumes.filter { $0.name.localizedCaseInsensitiveContains(searchText) }
+    }
+
     var body: some View {
         VStack {
             if viewModel.isLoading && viewModel.volumes.isEmpty {
@@ -18,13 +24,14 @@ struct VolumeListView: View {
             } else {
                 ScrollView {
                     LazyVStack(spacing: 12) {
-                        ForEach(viewModel.volumes) { volume in
+                        ForEach(filteredVolumes) { volume in
                             HStack {
                                 VStack(alignment: .leading, spacing: 4) {
                                     Text(volume.name)
                                         .font(.headline)
+                                        .textSelection(.enabled)
                                     if let format = volume.format {
-                                        Text("Format: \(format)")
+                                        Text(format)
                                             .font(.subheadline)
                                             .foregroundStyle(.secondary)
                                     }
@@ -57,9 +64,15 @@ struct VolumeListView: View {
                 }
                 .background(Color(nsColor: .windowBackgroundColor))
                 .animation(.snappy, value: viewModel.volumes)
+                .overlay {
+                    if filteredVolumes.isEmpty {
+                        ContentUnavailableView.search(text: searchText)
+                    }
+                }
             }
         }
         .navigationTitle("Volumes")
+        .searchable(text: $searchText, prompt: "Search volumes")
         .toolbar {
             ToolbarItem(placement: .primaryAction) {
                 Button(action: {
@@ -70,9 +83,7 @@ struct VolumeListView: View {
             }
         }
         .onAppear {
-            Task {
-                await viewModel.fetchVolumes()
-            }
+            Task { await viewModel.fetchVolumes() }
         }
         .alert(
             "Error",
@@ -102,7 +113,7 @@ struct VolumeListView: View {
             Text("This action cannot be undone.")
         }
     }
-    
+
     private func formatBytes(_ bytes: Int64) -> String {
         let formatter = ByteCountFormatter()
         formatter.allowedUnits = [.useAll]

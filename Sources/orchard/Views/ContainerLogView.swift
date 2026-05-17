@@ -4,8 +4,8 @@ struct ContainerLogView: View {
     @State private var viewModel: ContainerLogViewModel
     @Environment(\.dismiss) private var dismiss
 
-    init(containerId: String) {
-        _viewModel = State(wrappedValue: ContainerLogViewModel(containerId: containerId))
+    init(containerId: String, containerName: String? = nil) {
+        _viewModel = State(wrappedValue: ContainerLogViewModel(containerId: containerId, containerName: containerName))
     }
 
     var body: some View {
@@ -16,7 +16,8 @@ struct ContainerLogView: View {
                         .font(.system(.caption, design: .monospaced))
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .padding()
-                    
+                        .textSelection(.enabled)
+
                     Color.clear
                         .frame(height: 1)
                         .id("bottom")
@@ -26,12 +27,10 @@ struct ContainerLogView: View {
                 }
             }
             .background(Color(NSColor.textBackgroundColor))
-            .navigationTitle("Logs: \(viewModel.containerId)")
+            .navigationTitle("Logs: \(viewModel.containerName ?? viewModel.containerId)")
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("Close") {
-                        dismiss()
-                    }
+                    Button("Close") { dismiss() }
                 }
                 ToolbarItem(placement: .primaryAction) {
                     Button(role: .destructive, action: {
