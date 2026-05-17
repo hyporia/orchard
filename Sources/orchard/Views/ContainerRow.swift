@@ -69,7 +69,7 @@ struct ContainerRow: View {
                     }
                 }) {
                     if isProcessing {
-                        ProgressView().controlSize(.small).tint(.orange)
+                        ProgressView().controlSize(.small).tint(.red)
                     } else {
                         Label("Stop", systemImage: "stop.fill")
                     }
@@ -77,8 +77,8 @@ struct ContainerRow: View {
                 .buttonStyle(.plain)
                 .padding(.horizontal, 10)
                 .padding(.vertical, 6)
-                .background(Color.orange.opacity(0.1))
-                .foregroundStyle(.orange)
+                .background(Color.red.opacity(0.1))
+                .foregroundStyle(.red)
                 .clipShape(Capsule())
                 .disabled(isProcessing)
 

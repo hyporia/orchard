@@ -38,7 +38,7 @@ struct ContentView: View {
                             Text("Containers")
                         } icon: {
                             Image(systemName: "shippingbox.fill")
-                                .foregroundStyle(.orange)
+                                .foregroundStyle(.blue)
                         }
                     }
                     .disabled(!isSystemRunning)

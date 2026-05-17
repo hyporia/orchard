@@ -117,12 +117,8 @@ class ContainerViewModel {
         }
     }
 
-    func run(image: String, name: String?, options: RunContainerOptions) async {
-        do {
-            try await service.runContainer(image: image, name: name, options: options)
-            await fetchContainers()
-        } catch {
-            errorMessage = error.localizedDescription
-        }
+    func run(image: String, name: String?, options: RunContainerOptions) async throws {
+        try await service.runContainer(image: image, name: name, options: options)
+        await fetchContainers()
     }
 }
