@@ -32,12 +32,6 @@ struct RunContainerView: View {
     var body: some View {
         NavigationStack {
             Form {
-                if let error = runError {
-                    Section {
-                        Label(error, systemImage: "exclamationmark.triangle.fill")
-                            .foregroundStyle(.red)
-                    }
-                }
                 imageSection
                 resourceSection
                 portsSection
@@ -46,6 +40,14 @@ struct RunContainerView: View {
                 flagsSection
             }
             .navigationTitle("Run Container")
+            .alert("Failed to Run Container", isPresented: Binding(
+                get: { runError != nil },
+                set: { if !$0 { runError = nil } }
+            )) {
+                Button("OK", role: .cancel) { runError = nil }
+            } message: {
+                if let error = runError { Text(error) }
+            }
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Cancel") { dismiss() }
