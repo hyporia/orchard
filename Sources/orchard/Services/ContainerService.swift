@@ -38,114 +38,24 @@ struct RunContainerOptions {
 }
 
 enum ContainerServiceError: Error, LocalizedError {
-    case processFailed(String)
     case decodingFailed
 
     var errorDescription: String? {
         switch self {
-        case .processFailed(let msg): return "Container process failed: \(msg)"
         case .decodingFailed: return "Failed to decode CLI response"
         }
     }
 }
 
-private final class DataBox: @unchecked Sendable {
-    var data = Data()
-}
-
-private final class CommandState: @unchecked Sendable {
-    private let lock = NSLock()
-    private var process: Process?
-    private var cancelled = false
-    private var resumed = false
-
-    func attach(_ process: Process) {
-        lock.lock()
-        self.process = process
-        let alreadyCancelled = cancelled
-        lock.unlock()
-        if alreadyCancelled { process.terminate() }
-    }
-
-    func cancel() {
-        lock.lock()
-        cancelled = true
-        let process = self.process
-        lock.unlock()
-        process?.terminate()
-    }
-
-    func claimCompletion() -> Bool {
-        lock.lock()
-        defer { lock.unlock() }
-        if resumed { return false }
-        resumed = true
-        return true
-    }
-}
-
 struct CLIContainerService: ContainerServiceProtocol {
+    private let processService: ContainerProcessServiceProtocol
+
+    init(processService: ContainerProcessServiceProtocol = ContainerProcessService.shared) {
+        self.processService = processService
+    }
+
     private func runCommand(arguments: [String]) async throws -> String {
-        let state = CommandState()
-        return try await withTaskCancellationHandler {
-            try await withCheckedThrowingContinuation {
-                (continuation: CheckedContinuation<String, Error>) in
-                DispatchQueue.global(qos: .userInitiated).async {
-                    do {
-                        let process = try Process.containerProcess(arguments: arguments)
-                        state.attach(process)
-
-                        let stdoutPipe = Pipe()
-                        let stderrPipe = Pipe()
-                        process.standardOutput = stdoutPipe
-                        process.standardError = stderrPipe
-
-                        try process.run()
-
-                        let stdoutBox = DataBox()
-                        let stderrBox = DataBox()
-                        let ioQueue = DispatchQueue(
-                            label: "orchard.process.io", attributes: .concurrent)
-                        let ioGroup = DispatchGroup()
-
-                        ioGroup.enter()
-                        ioQueue.async {
-                            stdoutBox.data =
-                                stdoutPipe.fileHandleForReading.readDataToEndOfFile()
-                            ioGroup.leave()
-                        }
-                        ioGroup.enter()
-                        ioQueue.async {
-                            stderrBox.data =
-                                stderrPipe.fileHandleForReading.readDataToEndOfFile()
-                            ioGroup.leave()
-                        }
-
-                        process.waitUntilExit()
-                        ioGroup.wait()
-
-                        guard state.claimCompletion() else { return }
-
-                        let stdoutData = stdoutBox.data
-                        let stderrData = stderrBox.data
-
-                        if process.terminationStatus != 0 {
-                            let errorMsg = String(data: stderrData, encoding: .utf8) ?? "Unknown error"
-                            continuation.resume(throwing: ContainerServiceError.processFailed(errorMsg))
-                            return
-                        }
-
-                        let output = String(data: stdoutData, encoding: .utf8) ?? ""
-                        continuation.resume(returning: output)
-                    } catch {
-                        guard state.claimCompletion() else { return }
-                        continuation.resume(throwing: error)
-                    }
-                }
-            }
-        } onCancel: {
-            state.cancel()
-        }
+        try await processService.run(arguments: arguments)
     }
 
     func fetchContainers() async throws -> [ContainerItem] {

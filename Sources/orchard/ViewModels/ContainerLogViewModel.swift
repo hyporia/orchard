@@ -8,10 +8,16 @@ class ContainerLogViewModel {
     private var logPipe: Pipe?
     let containerId: String
     let containerName: String?
+    private let processService: ContainerProcessServiceProtocol
 
-    init(containerId: String, containerName: String? = nil) {
+    init(
+        containerId: String,
+        containerName: String? = nil,
+        processService: ContainerProcessServiceProtocol = ContainerProcessService.shared
+    ) {
         self.containerId = containerId
         self.containerName = containerName
+        self.processService = processService
     }
 
     func startStreaming() {
@@ -20,7 +26,7 @@ class ContainerLogViewModel {
 
         let newProcess: Process
         do {
-            newProcess = try Process.containerProcess(arguments: ["logs", "-f", containerId])
+            newProcess = try processService.makeProcess(arguments: ["logs", "-f", containerId])
         } catch {
             logs.append("\nError starting process: \(error.localizedDescription)\n")
             return
