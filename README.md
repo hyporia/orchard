@@ -48,12 +48,12 @@ Sources/orchard/
 ├── orchard.swift              # @main App entry point + AppDelegate
 ├── Models/                    # Codable data models (ContainerItem, ImageItem, …)
 ├── Services/
-│   └── ContainerService.swift # ContainerServiceProtocol + CLIContainerService + MockContainerService
+│   └── ContainerService.swift # ContainerServiceProtocol + ContainerService + MockContainerService
 ├── ViewModels/                # @MainActor @Observable classes, one per section
 └── Views/                     # SwiftUI views (ContentView is the root NavigationSplitView)
 ```
 
-All container operations flow through `CLIContainerService`, which invokes the `container` CLI with `--format json` and decodes the result. Every ViewModel takes a `ContainerServiceProtocol` via init injection, so `MockContainerService` can drive tests and SwiftUI previews without a running daemon.
+All container operations flow through `ContainerService`, which invokes the `container` CLI with `--format json` and decodes the result. Every ViewModel takes a `ContainerServiceProtocol` via init injection, so `MockContainerService` can drive tests and SwiftUI previews without a running daemon.
 
 For contributor-facing details on code style, concurrency rules, and conventions, see [AGENTS.md](AGENTS.md).
 

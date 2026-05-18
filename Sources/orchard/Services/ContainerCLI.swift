@@ -183,18 +183,24 @@ final class ContainerCLI: ContainerCLIProtocol, @unchecked Sendable {
             }
 
             // Safety net: fires if the process dies without an EOF callback.
-            process.terminationHandler = { _ in continuation.finish() }
+            process.terminationHandler = { _ in
+                pipe.fileHandleForReading.readabilityHandler = nil
+                continuation.finish()
+            }
 
             // Consumer cancellation (or natural finish) tears the process down.
             continuation.onTermination = { @Sendable _ in state.cancel() }
 
+            // Attach before run() so a cancel arriving during launch still
+            // terminates the process (mirrors run(arguments:) ordering).
+            state.attach(process)
             do {
                 try process.run()
             } catch {
+                pipe.fileHandleForReading.readabilityHandler = nil
                 continuation.finish(throwing: error)
                 return
             }
-            state.attach(process)
         }
     }
 

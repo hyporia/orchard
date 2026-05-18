@@ -8,6 +8,11 @@ class ContainerViewModel {
     var cpuPercent: [String: Double] = [:]
     var isLoading: Bool = false
     var errorMessage: String?
+    var processingIds: Set<String> = []
+
+    func isProcessing(_ id: String) -> Bool {
+        processingIds.contains(id)
+    }
 
     private let service: ContainerServiceProtocol
     private var pollingTask: Task<Void, Never>?
@@ -22,7 +27,7 @@ class ContainerViewModel {
         pollingTask?.cancel()
         pollingTask = Task {
             while !Task.isCancelled {
-                await fetchStats()
+                await fetchStatsOnce()
                 try? await Task.sleep(for: .seconds(2))
             }
         }
@@ -33,7 +38,7 @@ class ContainerViewModel {
         pollingTask = nil
     }
 
-    private func fetchStats() async {
+    func fetchStatsOnce() async {
         do {
             let now = Date()
             let fetchedStats = try await service.fetchStats()
@@ -60,7 +65,11 @@ class ContainerViewModel {
             self.stats = newStats
             self.cpuPercent = newCpuPercent
         } catch {
-            // Silently fail stats to avoid UI spam
+            // INTENTIONAL error-swallow (sanctioned exception to the
+            // AGENTS.md "surface errors via errorMessage" rule): fetchStats
+            // polls every 2s; a transient failure must not raise an alert or
+            // clobber errorMessage set by a user-initiated action. The
+            // previous stats simply remain on screen until the next poll.
         }
     }
 
@@ -68,8 +77,7 @@ class ContainerViewModel {
         isLoading = true
         errorMessage = nil
         do {
-            let status = try await service.getSystemStatus()
-            guard status.status == "running" else {
+            guard try await checkSystemRunning(service) == .proceed else {
                 self.containers = []
                 self.isLoading = false
                 return
@@ -82,6 +90,8 @@ class ContainerViewModel {
     }
 
     func start(containerId: String) async {
+        processingIds.insert(containerId)
+        defer { processingIds.remove(containerId) }
         do {
             try await service.startContainer(id: containerId)
             await fetchContainers()
@@ -91,6 +101,8 @@ class ContainerViewModel {
     }
 
     func stop(containerId: String) async {
+        processingIds.insert(containerId)
+        defer { processingIds.remove(containerId) }
         do {
             try await service.stopContainer(id: containerId)
             await fetchContainers()
@@ -100,6 +112,8 @@ class ContainerViewModel {
     }
 
     func restart(containerId: String) async {
+        processingIds.insert(containerId)
+        defer { processingIds.remove(containerId) }
         do {
             try await service.stopContainer(id: containerId)
             try await service.startContainer(id: containerId)
@@ -110,6 +124,8 @@ class ContainerViewModel {
     }
 
     func delete(containerId: String) async {
+        processingIds.insert(containerId)
+        defer { processingIds.remove(containerId) }
         do {
             if let container = containers.first(where: { $0.id == containerId }),
                 container.state == "running"

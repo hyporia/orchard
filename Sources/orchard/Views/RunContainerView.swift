@@ -241,43 +241,12 @@ struct RunContainerView: View {
         }
     }
 
-    // MARK: - Validators
+    // MARK: - Validators (delegate to shared RunContainerValidator)
 
-    private func isValidName(_ name: String) -> Bool {
-        name.range(of: #"^[a-zA-Z0-9][a-zA-Z0-9_.-]*$"#, options: .regularExpression) != nil
-    }
-
-    private func isValidMemory(_ memory: String) -> Bool {
-        let pattern = #"^(\d+(?:\.\d+)?)([KMGkmg])$"#
-        guard let regex = try? NSRegularExpression(pattern: pattern),
-              let match = regex.firstMatch(in: memory, range: NSRange(memory.startIndex..., in: memory)),
-              let numRange = Range(match.range(at: 1), in: memory),
-              let unitRange = Range(match.range(at: 2), in: memory),
-              let value = Double(memory[numRange]) else { return false }
-        let mb: Double
-        switch memory[unitRange].lowercased() {
-        case "k": mb = value / 1024
-        case "m": mb = value
-        case "g": mb = value * 1024
-        default: return false
-        }
-        return mb >= 200
-    }
-
-    private func isValidCpus(_ cpus: String) -> Bool {
-        guard let value = Double(cpus) else { return false }
-        return value > 0
-    }
-
-    private func isValidPort(_ port: String) -> Bool {
-        port.range(of: #"^\d+(:\d+)?(/tcp|/udp)?$"#, options: .regularExpression) != nil
-    }
-
-    private func isValidEnv(_ env: String) -> Bool {
-        env.range(of: #"^[a-zA-Z_][a-zA-Z0-9_]*="#, options: .regularExpression) != nil
-    }
-
-    private func isValidVolume(_ volume: String) -> Bool {
-        volume.contains(":")
-    }
+    private func isValidName(_ name: String) -> Bool { RunContainerValidator.isValidName(name) }
+    private func isValidMemory(_ memory: String) -> Bool { RunContainerValidator.isValidMemory(memory) }
+    private func isValidCpus(_ cpus: String) -> Bool { RunContainerValidator.isValidCpus(cpus) }
+    private func isValidPort(_ port: String) -> Bool { RunContainerValidator.isValidPort(port) }
+    private func isValidEnv(_ env: String) -> Bool { RunContainerValidator.isValidEnv(env) }
+    private func isValidVolume(_ volume: String) -> Bool { RunContainerValidator.isValidVolume(volume) }
 }

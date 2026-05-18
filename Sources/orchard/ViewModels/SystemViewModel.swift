@@ -32,7 +32,8 @@ class SystemViewModel {
                 isRunning: resolvedStatus.status == "running",
                 status: resolvedStatus.status,
                 version: finalVersion,
-                diskUsage: resolvedDf
+                diskUsage: resolvedDf,
+                cliMissing: resolvedStatus.cliMissing
             )
         } catch {
             self.systemInfo = SystemInfo(

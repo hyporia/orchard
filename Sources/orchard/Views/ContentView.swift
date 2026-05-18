@@ -20,6 +20,16 @@ struct ContentView: View {
         systemViewModel.systemInfo?.isRunning == true
     }
 
+    var cliMissing: Bool {
+        systemViewModel.systemInfo?.cliMissing == true
+    }
+
+    private func disabledHelp(_ noun: String) -> String {
+        cliMissing
+            ? "The 'container' CLI was not found. Install it and ensure it is in your PATH."
+            : "Start the system daemon to manage \(noun)"
+    }
+
     var body: some View {
         NavigationSplitView {
             List(selection: $selection) {
@@ -42,7 +52,7 @@ struct ContentView: View {
                         }
                     }
                     .disabled(!isSystemRunning)
-                    .help(isSystemRunning ? "" : "Start the system daemon to manage containers")
+                    .help(isSystemRunning ? "" : disabledHelp("containers"))
 
                     NavigationLink(value: "images") {
                         Label {
@@ -53,7 +63,7 @@ struct ContentView: View {
                         }
                     }
                     .disabled(!isSystemRunning)
-                    .help(isSystemRunning ? "" : "Start the system daemon to manage images")
+                    .help(isSystemRunning ? "" : disabledHelp("images"))
 
                     NavigationLink(value: "volumes") {
                         Label {
@@ -64,7 +74,7 @@ struct ContentView: View {
                         }
                     }
                     .disabled(!isSystemRunning)
-                    .help(isSystemRunning ? "" : "Start the system daemon to manage volumes")
+                    .help(isSystemRunning ? "" : disabledHelp("volumes"))
                 }
             }
             .navigationTitle("Orchard")

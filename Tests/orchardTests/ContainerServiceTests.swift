@@ -117,7 +117,7 @@ private enum JSON {
 
 // MARK: - Container listing & stats
 
-@Suite("CLIContainerService — containers")
+@Suite("ContainerService — containers")
 struct ContainerServiceContainerTests {
 
     @Test func fetchContainersDecodesJSONArray() async throws {
@@ -214,7 +214,7 @@ struct ContainerServiceContainerTests {
 
 // MARK: - Container lifecycle
 
-@Suite("CLIContainerService — lifecycle")
+@Suite("ContainerService — lifecycle")
 struct ContainerServiceLifecycleTests {
 
     @Test func startContainerSendsCorrectArguments() async throws {
@@ -256,6 +256,17 @@ struct ContainerServiceLifecycleTests {
         } else {
             Issue.record("expected .processFailed, got \(String(describing: thrown))")
         }
+    }
+
+    @Test func runContainerThrowsValidationErrorBeforeInvokingCLI() async throws {
+        let (service, mock) = makeService()
+        var options = RunContainerOptions()
+        options.memory = "5M"
+
+        await #expect(throws: RunContainerValidationError.self) {
+            try await service.runContainer(image: "nginx", name: nil, options: options)
+        }
+        #expect(mock.invocations.isEmpty)
     }
 
     @Test func runContainerWithDefaultOptionsSendsMinimalArguments() async throws {
@@ -312,7 +323,7 @@ struct ContainerServiceLifecycleTests {
 
 // MARK: - System
 
-@Suite("CLIContainerService — system")
+@Suite("ContainerService — system")
 struct ContainerServiceSystemTests {
 
     @Test func getSystemStatusDecodesResponse() async throws {
@@ -372,6 +383,26 @@ struct ContainerServiceSystemTests {
         }
     }
 
+    @Test func getSystemStatusFlagsCliMissing() async throws {
+        let (service, mock) = makeService()
+        mock.stub(error: ContainerCLIError.executableNotFound)
+
+        let status = try await service.getSystemStatus()
+
+        #expect(status.cliMissing == true)
+        #expect(status.status == "stopped")
+    }
+
+    @Test func getSystemStatusDoesNotFlagCliMissingForDaemonError() async throws {
+        let (service, mock) = makeService()
+        mock.stub(error: ContainerCLIError.processFailed("daemon not running"))
+
+        let status = try await service.getSystemStatus()
+
+        #expect(status.cliMissing == false)
+        #expect(status.status == "stopped")
+    }
+
     @Test func getCliVersionTrimsWhitespace() async throws {
         let (service, mock) = makeService()
         mock.stub(output: "container CLI version 0.4.1\n")
@@ -403,7 +434,7 @@ struct ContainerServiceSystemTests {
 
 // MARK: - Images
 
-@Suite("CLIContainerService — images")
+@Suite("ContainerService — images")
 struct ContainerServiceImageTests {
 
     @Test func fetchImagesDecodesResponse() async throws {
@@ -464,7 +495,7 @@ struct ContainerServiceImageTests {
 
 // MARK: - Volumes
 
-@Suite("CLIContainerService — volumes")
+@Suite("ContainerService — volumes")
 struct ContainerServiceVolumeTests {
 
     @Test func fetchVolumesDecodesResponse() async throws {
@@ -567,5 +598,17 @@ struct ContainerLogViewModelTests {
         vm.stopStreaming()
 
         #expect(vm.streamTask == nil)
+    }
+
+    @Test func logsAreTruncatedWhenExceedingCap() async throws {
+        let (service, mock) = makeService()
+        let chunk = String(repeating: "x", count: 30_000)
+        mock.stub(streamChunks: [chunk, chunk, chunk])
+        let vm = ContainerLogViewModel(containerId: "cap-test", service: service)
+
+        vm.startStreaming()
+        await vm.streamTask?.value
+
+        #expect(vm.logs.count <= 50_000)
     }
 }

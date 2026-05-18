@@ -101,6 +101,7 @@ struct ContainerService: ContainerServiceProtocol {
     }
 
     func runContainer(image: String, name: String?, options: RunContainerOptions) async throws {
+        try RunContainerValidator.validate(image: image, name: name, options: options)
         var args = ["run", "-d"]
         if let name = name, !name.isEmpty {
             args += ["--name", name]
@@ -141,7 +142,13 @@ struct ContainerService: ContainerServiceProtocol {
                 throw ContainerServiceError.decodingFailed
             }
             return try JSONDecoder().decode(SystemStatus.self, from: data)
+        } catch ContainerCLIError.executableNotFound {
+            // CLI not installed is distinct from "daemon stopped": surface it
+            // so the UI can tell the user to install `container`, not start it.
+            return SystemStatus(status: "stopped", apiServerVersion: nil, cliMissing: true)
         } catch {
+            // Any other failure (daemon down, decode error) = daemon stopped.
+            // This is the only intentional error-swallow in the service.
             return SystemStatus(status: "stopped", apiServerVersion: nil)
         }
     }

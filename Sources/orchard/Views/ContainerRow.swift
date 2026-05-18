@@ -10,7 +10,10 @@ struct ContainerRow: View {
 
     @State private var showingLogs = false
     @State private var showDeleteConfirmation = false
-    @State private var isProcessing = false
+
+    var isProcessing: Bool {
+        viewModel.isProcessing(container.id)
+    }
 
     var body: some View {
         HStack {
@@ -62,11 +65,7 @@ struct ContainerRow: View {
 
             if isRunning {
                 Button(action: {
-                    Task {
-                        withAnimation(.snappy) { isProcessing = true }
-                        await viewModel.stop(containerId: container.id)
-                        withAnimation(.snappy) { isProcessing = false }
-                    }
+                    Task { await viewModel.stop(containerId: container.id) }
                 }) {
                     if isProcessing {
                         ProgressView().controlSize(.small).tint(.red)
@@ -83,11 +82,7 @@ struct ContainerRow: View {
                 .disabled(isProcessing)
 
                 Button(action: {
-                    Task {
-                        withAnimation(.snappy) { isProcessing = true }
-                        await viewModel.restart(containerId: container.id)
-                        withAnimation(.snappy) { isProcessing = false }
-                    }
+                    Task { await viewModel.restart(containerId: container.id) }
                 }) {
                     Label("Restart", systemImage: "arrow.clockwise")
                 }
@@ -100,11 +95,7 @@ struct ContainerRow: View {
                 .disabled(isProcessing)
             } else {
                 Button(action: {
-                    Task {
-                        withAnimation(.snappy) { isProcessing = true }
-                        await viewModel.start(containerId: container.id)
-                        withAnimation(.snappy) { isProcessing = false }
-                    }
+                    Task { await viewModel.start(containerId: container.id) }
                 }) {
                     if isProcessing {
                         ProgressView().controlSize(.small).tint(.green)
@@ -164,11 +155,4 @@ struct ContainerRow: View {
         return usageStr
     }
 
-    private func formatBytes(_ bytes: Int64) -> String {
-        let mb = Double(bytes) / 1_000_000.0
-        if mb >= 1000 {
-            return String(format: "%.1f GB", mb / 1000)
-        }
-        return String(format: "%.0f MB", mb)
-    }
 }

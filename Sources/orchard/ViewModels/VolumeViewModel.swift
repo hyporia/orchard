@@ -17,8 +17,7 @@ class VolumeViewModel {
         isLoading = true
         errorMessage = nil
         do {
-            let status = try await service.getSystemStatus()
-            guard status.status == "running" else {
+            guard try await checkSystemRunning(service) == .proceed else {
                 self.volumes = []
                 self.isLoading = false
                 return

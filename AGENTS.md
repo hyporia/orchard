@@ -33,7 +33,7 @@ Sources/orchard/
 │   ├── AdditionalModels.swift # ImageItem, VolumeItem, ContainerStat, etc.
 │   └── SystemModel.swift      # SystemStatus, SystemDiskUsage
 ├── Services/
-│   └── ContainerService.swift # ContainerServiceProtocol + CLIContainerService + MockContainerService
+│   └── ContainerService.swift # ContainerServiceProtocol + ContainerService + MockContainerService
 ├── ViewModels/                # @MainActor ObservableObject classes
 │   ├── ContainerViewModel.swift
 │   ├── ContainerLogViewModel.swift
@@ -54,7 +54,7 @@ Sources/orchard/
 - **Swift 6 strict concurrency**: All ViewModels are `@MainActor`. Models crossing actor boundaries must be `Sendable`. Use `@Sendable` closures and `Task { @MainActor in }` instead of `DispatchQueue.main.async`.
 - **Blocking work**: Never run `Process.run()` / `waitUntilExit()` directly in `async` contexts. Wrap in `withCheckedThrowingContinuation` + `DispatchQueue.global()` to avoid starving the cooperative thread pool.
 - **DI pattern**: All ViewModels accept a `ContainerServiceProtocol` via init injection. Use `MockContainerService` for tests and previews.
-- **CLI interaction**: All container operations go through `CLIContainerService.runCommand()` which invokes `/usr/bin/env container <args>`. Never read container runtime files directly from disk.
+- **CLI interaction**: All container operations go through `ContainerService.runCommand()` which invokes `/usr/bin/env container <args>`. Never read container runtime files directly from disk.
 - **Error handling**: Surface errors via ViewModel `errorMessage` properties. Don't silently swallow errors with `try?` or empty catch blocks returning `[]`.
 - **Naming**: Models use `Item` suffix (e.g. `ContainerItem`, `ImageItem`). ViewModels use `ViewModel` suffix. Views match their content (e.g. `ContainerRow`, `ImageListView`).
 

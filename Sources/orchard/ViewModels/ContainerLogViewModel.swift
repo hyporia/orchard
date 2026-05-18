@@ -38,10 +38,16 @@ class ContainerLogViewModel {
         }
     }
 
+    private var approxLength = 0
+    private static let maxLength = 50_000
+    private static let keepLength = 40_000
+
     private func appendLog(_ string: String) {
         logs.append(string)
-        if logs.count > 50000 {
-            logs = String(logs.suffix(40000))
+        approxLength += string.utf16.count
+        if approxLength > Self.maxLength {
+            logs = String(logs.suffix(Self.keepLength))
+            approxLength = logs.utf16.count
         }
     }
 
