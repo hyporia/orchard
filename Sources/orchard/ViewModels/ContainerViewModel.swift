@@ -14,7 +14,7 @@ class ContainerViewModel {
     private var previousStats: [String: ContainerStat] = [:]
     private var previousPollTime: Date?
 
-    init(service: ContainerServiceProtocol = CLIContainerService()) {
+    init(service: ContainerServiceProtocol = ContainerService()) {
         self.service = service
     }
 
@@ -43,9 +43,10 @@ class ContainerViewModel {
             for stat in fetchedStats {
                 newStats[stat.id] = stat
                 if let prev = previousStats[stat.id],
-                   let prevCpu = prev.cpuUsageUsec,
-                   let currCpu = stat.cpuUsageUsec,
-                   let prevTime = previousPollTime {
+                    let prevCpu = prev.cpuUsageUsec,
+                    let currCpu = stat.cpuUsageUsec,
+                    let prevTime = previousPollTime
+                {
                     let elapsedUsec = now.timeIntervalSince(prevTime) * 1_000_000
                     if elapsedUsec > 0 && currCpu >= prevCpu {
                         let delta = Double(currCpu - prevCpu)
@@ -111,7 +112,8 @@ class ContainerViewModel {
     func delete(containerId: String) async {
         do {
             if let container = containers.first(where: { $0.id == containerId }),
-               container.state == "running" {
+                container.state == "running"
+            {
                 try await service.stopContainer(id: containerId)
             }
             try await service.deleteContainer(id: containerId)

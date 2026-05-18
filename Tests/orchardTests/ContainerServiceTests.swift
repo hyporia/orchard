@@ -5,17 +5,20 @@ import Testing
 
 // MARK: - Process service mock
 
-/// Mock for `ContainerProcessServiceProtocol`.
+/// Mock for `ContainerCLIProtocol`.
 ///
 /// Records every `run(arguments:)` invocation and returns either a stubbed
 /// string, a stubbed error, or the result of a per-call handler. Thread-safe
 /// (NSLock-guarded) so it satisfies the `Sendable` requirement of the protocol.
-private final class MockProcessService: ContainerProcessServiceProtocol, @unchecked Sendable {
+private final class MockContainerCLI: ContainerCLIProtocol, @unchecked Sendable {
     private let lock = NSLock()
     private var _invocations: [[String]] = []
     private var _output: String = ""
     private var _error: Error?
     private var _handler: (@Sendable ([String]) throws -> String)?
+    private var _streamChunks: [String] = []
+    private var _streamError: Error?
+    private var _streamedContainerIds: [String] = []
 
     /// Every argument array passed to `run`, in call order.
     var invocations: [[String]] {
@@ -24,6 +27,11 @@ private final class MockProcessService: ContainerProcessServiceProtocol, @unchec
 
     var lastArguments: [String]? {
         lock.withLock { _invocations.last }
+    }
+
+    /// Every container id passed to `streamLogs`, in call order.
+    var streamedContainerIds: [String] {
+        lock.withLock { _streamedContainerIds }
     }
 
     func stub(output: String) {
@@ -48,9 +56,27 @@ private final class MockProcessService: ContainerProcessServiceProtocol, @unchec
         }
     }
 
-    func makeProcess(arguments: [String]) throws -> Process {
-        // CLIContainerService never calls this directly; it routes through `run`.
-        Process()
+    /// Stubs the chunks `stream` will yield, optionally finishing with an error.
+    func stub(streamChunks: [String], thenError error: Error? = nil) {
+        lock.withLock {
+            _streamChunks = streamChunks
+            _streamError = error
+        }
+    }
+
+    func streamLogs(containerId: String) -> AsyncThrowingStream<String, Error> {
+        let (chunks, error): ([String], Error?) = lock.withLock {
+            _streamedContainerIds.append(containerId)
+            return (_streamChunks, _streamError)
+        }
+        return AsyncThrowingStream<String, Error> { continuation in
+            for chunk in chunks { continuation.yield(chunk) }
+            if let error {
+                continuation.finish(throwing: error)
+            } else {
+                continuation.finish()
+            }
+        }
     }
 
     func run(arguments: [String]) async throws -> String {
@@ -70,9 +96,9 @@ private final class MockProcessService: ContainerProcessServiceProtocol, @unchec
 
 private enum TestError: Error { case boom }
 
-private func makeService() -> (CLIContainerService, MockProcessService) {
-    let mock = MockProcessService()
-    return (CLIContainerService(processService: mock), mock)
+private func makeService() -> (ContainerService, MockContainerCLI) {
+    let mock = MockContainerCLI()
+    return (ContainerService(cli: mock), mock)
 }
 
 // MARK: - JSON fixtures
@@ -151,9 +177,9 @@ struct ContainerServiceContainerTests {
 
     @Test func fetchContainersPropagatesProcessError() async throws {
         let (service, mock) = makeService()
-        mock.stub(error: ContainerProcessError.executableNotFound)
+        mock.stub(error: ContainerCLIError.executableNotFound)
 
-        await #expect(throws: ContainerProcessError.self) {
+        await #expect(throws: ContainerCLIError.self) {
             _ = try await service.fetchContainers()
         }
     }
@@ -220,9 +246,9 @@ struct ContainerServiceLifecycleTests {
 
     @Test func startContainerPropagatesError() async throws {
         let (service, mock) = makeService()
-        mock.stub(error: ContainerProcessError.processFailed("no such container"))
+        mock.stub(error: ContainerCLIError.processFailed("no such container"))
 
-        let thrown = await #expect(throws: ContainerProcessError.self) {
+        let thrown = await #expect(throws: ContainerCLIError.self) {
             try await service.startContainer(id: "missing")
         }
         if case .processFailed(let msg) = thrown {
@@ -302,7 +328,7 @@ struct ContainerServiceSystemTests {
 
     @Test func getSystemStatusReturnsStoppedOnError() async throws {
         let (service, mock) = makeService()
-        mock.stub(error: ContainerProcessError.processFailed("daemon not running"))
+        mock.stub(error: ContainerCLIError.processFailed("daemon not running"))
 
         // This is the one method that intentionally swallows errors.
         let status = try await service.getSystemStatus()
@@ -498,5 +524,48 @@ struct ContainerServiceVolumeTests {
         try await service.deleteVolume(name: "data")
 
         #expect(mock.lastArguments == ["volume", "rm", "data"])
+    }
+}
+
+// MARK: - Log streaming
+
+@MainActor
+@Suite("ContainerLogViewModel")
+struct ContainerLogViewModelTests {
+
+    @Test func streamingAppendsChunksAndSendsLogArguments() async throws {
+        let (service, mock) = makeService()
+        mock.stub(streamChunks: ["line one\n", "line two\n"])
+        let vm = ContainerLogViewModel(containerId: "abc123", service: service)
+
+        vm.startStreaming()
+        await vm.streamTask?.value
+
+        #expect(mock.streamedContainerIds == ["abc123"])
+        #expect(vm.logs.contains("line one\n"))
+        #expect(vm.logs.contains("line two\n"))
+    }
+
+    @Test func streamingSurfacesErrorInLogs() async throws {
+        let (service, mock) = makeService()
+        mock.stub(streamChunks: [], thenError: ContainerCLIError.executableNotFound)
+        let vm = ContainerLogViewModel(containerId: "abc", service: service)
+
+        vm.startStreaming()
+        await vm.streamTask?.value
+
+        #expect(vm.logs.contains("Error starting process:"))
+    }
+
+    @Test func stopStreamingClearsTask() async throws {
+        let (service, mock) = makeService()
+        mock.stub(streamChunks: ["x\n"])
+        let vm = ContainerLogViewModel(containerId: "abc", service: service)
+
+        vm.startStreaming()
+        await vm.streamTask?.value
+        vm.stopStreaming()
+
+        #expect(vm.streamTask == nil)
     }
 }

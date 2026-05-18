@@ -25,6 +25,9 @@ protocol ContainerServiceProtocol: Sendable {
 
     // Container lifecycle
     func runContainer(image: String, name: String?, options: RunContainerOptions) async throws
+
+    // Logs
+    func streamLogs(containerId: String) -> AsyncThrowingStream<String, Error>
 }
 
 struct RunContainerOptions {
@@ -47,15 +50,15 @@ enum ContainerServiceError: Error, LocalizedError {
     }
 }
 
-struct CLIContainerService: ContainerServiceProtocol {
-    private let processService: ContainerProcessServiceProtocol
+struct ContainerService: ContainerServiceProtocol {
+    private let cli: ContainerCLIProtocol
 
-    init(processService: ContainerProcessServiceProtocol = ContainerProcessService.shared) {
-        self.processService = processService
+    init(cli: ContainerCLIProtocol = ContainerCLI.shared) {
+        self.cli = cli
     }
 
     private func runCommand(arguments: [String]) async throws -> String {
-        try await processService.run(arguments: arguments)
+        try await cli.run(arguments: arguments)
     }
 
     func fetchContainers() async throws -> [ContainerItem] {
@@ -125,6 +128,10 @@ struct CLIContainerService: ContainerServiceProtocol {
         }
         args.append(image)
         _ = try await runCommand(arguments: args)
+    }
+
+    func streamLogs(containerId: String) -> AsyncThrowingStream<String, Error> {
+        cli.streamLogs(containerId: containerId)
     }
 
     func getSystemStatus() async throws -> SystemStatus {
@@ -207,6 +214,9 @@ struct MockContainerService: ContainerServiceProtocol {
     func stopContainer(id: String) async throws {}
     func deleteContainer(id: String) async throws {}
     func runContainer(image: String, name: String?, options: RunContainerOptions) async throws {}
+    func streamLogs(containerId: String) -> AsyncThrowingStream<String, Error> {
+        AsyncThrowingStream { $0.finish() }
+    }
 
     func getSystemStatus() async throws -> SystemStatus {
         SystemStatus(status: "running", apiServerVersion: "mock")

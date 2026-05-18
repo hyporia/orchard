@@ -8,7 +8,7 @@ struct ContentView: View {
     @State private var volumeViewModel: VolumeViewModel
     @State private var selection: String? = "system"
 
-    init(service: ContainerServiceProtocol = CLIContainerService()) {
+    init(service: ContainerServiceProtocol = ContainerService()) {
         self.service = service
         self._systemViewModel = State(initialValue: SystemViewModel(service: service))
         self._containerViewModel = State(initialValue: ContainerViewModel(service: service))
@@ -93,8 +93,8 @@ struct ContainerListView: View {
     var filteredContainers: [ContainerItem] {
         guard !searchText.isEmpty else { return viewModel.containers }
         return viewModel.containers.filter {
-            $0.names.localizedCaseInsensitiveContains(searchText) ||
-            $0.image.localizedCaseInsensitiveContains(searchText)
+            $0.names.localizedCaseInsensitiveContains(searchText)
+                || $0.image.localizedCaseInsensitiveContains(searchText)
         }
     }
 
@@ -157,7 +157,7 @@ struct ContainerListView: View {
                 set: { if !$0 { viewModel.errorMessage = nil } }
             )
         ) {
-            Button("OK", role: .cancel) { }
+            Button("OK", role: .cancel) {}
         } message: {
             Text(viewModel.errorMessage ?? "")
         }

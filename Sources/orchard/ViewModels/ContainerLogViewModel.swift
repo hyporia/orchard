@@ -4,57 +4,37 @@ import Foundation
 @Observable
 class ContainerLogViewModel {
     var logs: String = ""
-    private var process: Process?
-    private var logPipe: Pipe?
     let containerId: String
     let containerName: String?
-    private let processService: ContainerProcessServiceProtocol
+    private let service: ContainerServiceProtocol
+    private(set) var streamTask: Task<Void, Never>?
 
     init(
         containerId: String,
         containerName: String? = nil,
-        processService: ContainerProcessServiceProtocol = ContainerProcessService.shared
+        service: ContainerServiceProtocol = ContainerService()
     ) {
         self.containerId = containerId
         self.containerName = containerName
-        self.processService = processService
+        self.service = service
     }
 
     func startStreaming() {
         let displayName = containerName ?? containerId
         logs = "Starting log stream for \(displayName)...\n"
 
-        let newProcess: Process
-        do {
-            newProcess = try processService.makeProcess(arguments: ["logs", "-f", containerId])
-        } catch {
-            logs.append("\nError starting process: \(error.localizedDescription)\n")
-            return
-        }
-
-        process = newProcess
-
-        logPipe = Pipe()
-        process?.standardOutput = logPipe
-        process?.standardError = logPipe
-
-        logPipe?.fileHandleForReading.readabilityHandler = { @Sendable [weak self] handle in
-            let data = handle.availableData
-            if data.isEmpty {
-                handle.readabilityHandler = nil
-                return
-            }
-            if let string = String(data: data, encoding: .utf8) {
-                Task { @MainActor in
-                    self?.appendLog(string)
+        streamTask?.cancel()
+        streamTask = Task { [weak self] in
+            guard let self else { return }
+            do {
+                for try await chunk in self.service.streamLogs(
+                    containerId: self.containerId)
+                {
+                    self.appendLog(chunk)
                 }
+            } catch {
+                self.appendLog("\nError starting process: \(error.localizedDescription)\n")
             }
-        }
-
-        do {
-            try process?.run()
-        } catch {
-            logs.append("\nError starting process: \(error.localizedDescription)\n")
         }
     }
 
@@ -66,11 +46,7 @@ class ContainerLogViewModel {
     }
 
     func stopStreaming() {
-        logPipe?.fileHandleForReading.readabilityHandler = nil
-        if process?.isRunning == true {
-            process?.terminate()
-        }
-        process = nil
-        logPipe = nil
+        streamTask?.cancel()
+        streamTask = nil
     }
 }

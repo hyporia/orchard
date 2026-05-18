@@ -10,7 +10,7 @@ class SystemViewModel {
     private let service: ContainerServiceProtocol
     private var pollingTask: Task<Void, Never>?
 
-    init(service: ContainerServiceProtocol = CLIContainerService()) {
+    init(service: ContainerServiceProtocol = ContainerService()) {
         self.service = service
     }
 
@@ -35,7 +35,8 @@ class SystemViewModel {
                 diskUsage: resolvedDf
             )
         } catch {
-            self.systemInfo = SystemInfo(isRunning: false, status: "stopped", version: "Unknown", diskUsage: nil)
+            self.systemInfo = SystemInfo(
+                isRunning: false, status: "stopped", version: "Unknown", diskUsage: nil)
         }
         isLoading = false
     }

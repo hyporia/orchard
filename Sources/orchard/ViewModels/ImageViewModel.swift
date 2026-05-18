@@ -11,7 +11,7 @@ class ImageViewModel {
 
     private let service: ContainerServiceProtocol
 
-    init(service: ContainerServiceProtocol = CLIContainerService()) {
+    init(service: ContainerServiceProtocol = ContainerService()) {
         self.service = service
     }
 

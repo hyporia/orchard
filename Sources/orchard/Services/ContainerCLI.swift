@@ -1,6 +1,6 @@
 import Foundation
 
-enum ContainerProcessError: Error, LocalizedError {
+enum ContainerCLIError: Error, LocalizedError {
     case executableNotFound
     case processFailed(String)
 
@@ -15,9 +15,9 @@ enum ContainerProcessError: Error, LocalizedError {
     }
 }
 
-protocol ContainerProcessServiceProtocol: Sendable {
-    func makeProcess(arguments: [String]) throws -> Process
+protocol ContainerCLIProtocol: Sendable {
     func run(arguments: [String]) async throws -> String
+    func streamLogs(containerId: String) -> AsyncThrowingStream<String, Error>
 }
 
 private final class DataBox: @unchecked Sendable {
@@ -55,20 +55,21 @@ private final class CommandState: @unchecked Sendable {
     }
 }
 
-/// Resolves the `container` CLI binary and builds configured `Process` instances.
+/// Typed gateway to the `container` CLI: resolves the binary and invokes it as a
+/// subprocess, returning output one-shot (`run`) or streamed (`streamLogs`).
 ///
 /// Discovery can shell out to `zsh -lc 'which container'`, so the resolved path is
-/// cached for the lifetime of the service. The env-var test override is evaluated
+/// cached for the lifetime of the instance. The env-var test override is evaluated
 /// on every call and is never cached, so it stays authoritative across uses.
-final class ContainerProcessService: ContainerProcessServiceProtocol, @unchecked Sendable {
-    static let shared = ContainerProcessService()
+final class ContainerCLI: ContainerCLIProtocol, @unchecked Sendable {
+    static let shared = ContainerCLI()
 
     private let lock = NSLock()
     private var cachedExecutableURL: URL?
 
     init() {}
 
-    func makeProcess(arguments: [String]) throws -> Process {
+    private func makeProcess(arguments: [String]) throws -> Process {
         let executableURL = try resolveExecutableURL()
 
         let process = Process()
@@ -136,7 +137,7 @@ final class ContainerProcessService: ContainerProcessServiceProtocol, @unchecked
                             let errorMsg =
                                 String(data: stderrData, encoding: .utf8) ?? "Unknown error"
                             continuation.resume(
-                                throwing: ContainerProcessError.processFailed(errorMsg))
+                                throwing: ContainerCLIError.processFailed(errorMsg))
                             return
                         }
 
@@ -150,6 +151,50 @@ final class ContainerProcessService: ContainerProcessServiceProtocol, @unchecked
             }
         } onCancel: {
             state.cancel()
+        }
+    }
+
+    func streamLogs(containerId: String) -> AsyncThrowingStream<String, Error> {
+        AsyncThrowingStream<String, Error> { continuation in
+            let process: Process
+            do {
+                process = try self.makeProcess(arguments: ["logs", "-f", containerId])
+            } catch {
+                continuation.finish(throwing: error)
+                return
+            }
+
+            let state = CommandState()
+
+            let pipe = Pipe()
+            process.standardOutput = pipe
+            process.standardError = pipe
+
+            pipe.fileHandleForReading.readabilityHandler = { handle in
+                let data = handle.availableData
+                if data.isEmpty {
+                    handle.readabilityHandler = nil
+                    continuation.finish()
+                    return
+                }
+                if let chunk = String(data: data, encoding: .utf8) {
+                    continuation.yield(chunk)
+                }
+            }
+
+            // Safety net: fires if the process dies without an EOF callback.
+            process.terminationHandler = { _ in continuation.finish() }
+
+            // Consumer cancellation (or natural finish) tears the process down.
+            continuation.onTermination = { @Sendable _ in state.cancel() }
+
+            do {
+                try process.run()
+            } catch {
+                continuation.finish(throwing: error)
+                return
+            }
+            state.attach(process)
         }
     }
 
@@ -171,7 +216,7 @@ final class ContainerProcessService: ContainerProcessServiceProtocol, @unchecked
         lock.unlock()
 
         guard let discovered = Self.discoverExecutablePath(environment: env) else {
-            throw ContainerProcessError.executableNotFound
+            throw ContainerCLIError.executableNotFound
         }
 
         lock.lock()

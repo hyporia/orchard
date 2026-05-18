@@ -10,12 +10,11 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 @main
 struct OrchardApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
-    private let service: ContainerServiceProtocol = CLIContainerService()
-    
+    private let service: ContainerServiceProtocol = ContainerService()
+
     var body: some Scene {
         WindowGroup {
             ContentView(service: service)
         }
     }
 }
-

@@ -6,13 +6,13 @@ class VolumeViewModel {
     var volumes: [VolumeItem] = []
     var isLoading: Bool = false
     var errorMessage: String?
-    
+
     private let service: ContainerServiceProtocol
-    
-    init(service: ContainerServiceProtocol = CLIContainerService()) {
+
+    init(service: ContainerServiceProtocol = ContainerService()) {
         self.service = service
     }
-    
+
     func fetchVolumes() async {
         isLoading = true
         errorMessage = nil
@@ -29,7 +29,7 @@ class VolumeViewModel {
         }
         isLoading = false
     }
-    
+
     func delete(name: String) async {
         do {
             try await service.deleteVolume(name: name)
