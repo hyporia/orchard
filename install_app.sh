@@ -1,7 +1,7 @@
 #!/bin/bash
 set -e
 
-ASSETS="Sources/orchard/assets.xcassets/AppIcon.appiconset"
+ASSETS="Sources/orchard/Assets.xcassets/AppIcon.appiconset"
 ICONSET="build/AppIcon.iconset"
 BUNDLE="build/Orchard.app"
 
