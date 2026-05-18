@@ -1,0 +1,77 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+jobs:
+  release:
+    name: Build & Release
+    runs-on: macos-15
+    permissions:
+      contents: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Test
+        run: swift test
+        env:
+          ORCHARD_FORCE_NO_CONTAINER: "1"
+
+      - name: Build release binary
+        run: swift build -c release
+
+      - name: Bundle Orchard.app
+        run: |
+          ASSETS="Sources/orchard/Assets.xcassets/AppIcon.appiconset"
+          ICONSET="build/AppIcon.iconset"
+          BUNDLE="build/Orchard.app"
+
+          mkdir -p "$BUNDLE/Contents/MacOS"
+          mkdir -p "$BUNDLE/Contents/Resources"
+
+          cp "$(swift build -c release --show-bin-path)/orchard" "$BUNDLE/Contents/MacOS/orchard"
+          cp Info.plist "$BUNDLE/Contents/"
+
+          mkdir -p "$ICONSET"
+          cp "$ASSETS/icon_16x16.png"      "$ICONSET/icon_16x16.png"
+          cp "$ASSETS/icon_16x16@2x.png"   "$ICONSET/icon_16x16@2x.png"
+          cp "$ASSETS/icon_32x32.png"      "$ICONSET/icon_32x32.png"
+          cp "$ASSETS/icon_32x32@2x.png"   "$ICONSET/icon_32x32@2x.png"
+          cp "$ASSETS/icon_128x128.png"    "$ICONSET/icon_128x128.png"
+          cp "$ASSETS/icon_128x128@2x.png" "$ICONSET/icon_128x128@2x.png"
+          cp "$ASSETS/icon_256x256.png"    "$ICONSET/icon_256x256.png"
+          cp "$ASSETS/icon_256x256@2x.png" "$ICONSET/icon_256x256@2x.png"
+          cp "$ASSETS/icon_512x512.png"    "$ICONSET/icon_512x512.png"
+          cp "$ASSETS/icon.png"            "$ICONSET/icon_512x512@2x.png"
+
+          iconutil -c icns "$ICONSET" -o "$BUNDLE/Contents/Resources/AppIcon.icns"
+          rm -rf "$ICONSET"
+
+      - name: Create DMG
+        run: |
+          hdiutil create \
+            -volname "Orchard" \
+            -srcfolder build/Orchard.app \
+            -ov \
+            -format UDZO \
+            build/Orchard.dmg
+
+      - name: Create source archive
+        run: |
+          VERSION="${GITHUB_REF_NAME}"
+          git archive \
+            --format=zip \
+            --prefix="orchard-${VERSION}/" \
+            HEAD \
+            -o "build/orchard-${VERSION}-source.zip"
+
+      - name: Publish GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          generate_release_notes: true
+          files: |
+            build/Orchard.dmg
+            build/orchard-*-source.zip

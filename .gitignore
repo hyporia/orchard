@@ -1,4 +1,9 @@
 /Packages
 xcuserdata/
 DerivedData/
-.*
+.build
+.claude
+.swiftpm
+.vscode
+.DS_Store
+/build
