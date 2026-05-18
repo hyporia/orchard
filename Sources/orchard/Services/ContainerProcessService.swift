@@ -58,8 +58,8 @@ private final class CommandState: @unchecked Sendable {
 /// Resolves the `container` CLI binary and builds configured `Process` instances.
 ///
 /// Discovery can shell out to `zsh -lc 'which container'`, so the resolved path is
-/// cached for the lifetime of the service. The env-var test overrides are evaluated
-/// on every call and are never cached, so they stay authoritative across uses.
+/// cached for the lifetime of the service. The env-var test override is evaluated
+/// on every call and is never cached, so it stays authoritative across uses.
 final class ContainerProcessService: ContainerProcessServiceProtocol, @unchecked Sendable {
     static let shared = ContainerProcessService()
 
@@ -156,10 +156,7 @@ final class ContainerProcessService: ContainerProcessServiceProtocol, @unchecked
     private func resolveExecutableURL() throws -> URL {
         let env = ProcessInfo.processInfo.environment
 
-        // Test overrides: evaluated every call, never cached.
-        if env["ORCHARD_FORCE_NO_CONTAINER"] == "1" {
-            throw ContainerProcessError.executableNotFound
-        }
+        // Test override: evaluated every call, never cached.
         if let overridePath = env["ORCHARD_CONTAINER_PATH"], !overridePath.isEmpty,
             FileManager.default.isExecutableFile(atPath: overridePath)
         {

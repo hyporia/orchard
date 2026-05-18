@@ -19,5 +19,3 @@ jobs:
 
       - name: Test
         run: swift test
-        env:
-          ORCHARD_FORCE_NO_CONTAINER: "1"
