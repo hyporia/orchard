@@ -23,6 +23,8 @@ Swift 6.0 toolchain, macOS 14+, no external dependencies.
 - **Daemon-stopped handling**: `getSystemStatus()` catches errors and returns `SystemStatus(status: "stopped")` rather than throwing. This is the *only* place that swallows errors intentionally; preserve that behavior.
 - **Output format**: All `container` subcommands are invoked with `--format json` and decoded with `JSONDecoder`. When adding a new command, follow the same pattern; don't parse human-readable output.
 
-## Stale references
+## Modern documentation
 
-- `AGENTS.md` points to `CODE_REVIEW.md` for known issues; that file does not exist in the repo. Ignore the reference or remove it if you touch `AGENTS.md`.
+You can use context7 when I need code generation, setup or configuration steps, or
+library/API documentation. This means you should automatically use the Context7 MCP
+tools to resolve library id and get library docs without me having to explicitly ask.

@@ -38,30 +38,3 @@ The project uses only Apple system frameworks (SwiftUI, Foundation) — there ar
 ```
 
 This builds a release binary, bundles it as `Orchard.app` with an icon, and copies it to `~/Applications/Orchard.app`.
-
-## Architecture
-
-MVVM with protocol-based dependency injection.
-
-```
-Sources/orchard/
-├── orchard.swift              # @main App entry point + AppDelegate
-├── Models/                    # Codable data models (ContainerItem, ImageItem, …)
-├── Services/
-│   └── ContainerService.swift # ContainerServiceProtocol + ContainerService + MockContainerService
-├── ViewModels/                # @MainActor @Observable classes, one per section
-└── Views/                     # SwiftUI views (ContentView is the root NavigationSplitView)
-```
-
-All container operations flow through `ContainerService`, which invokes the `container` CLI with `--format json` and decodes the result. Every ViewModel takes a `ContainerServiceProtocol` via init injection, so `MockContainerService` can drive tests and SwiftUI previews without a running daemon.
-
-For contributor-facing details on code style, concurrency rules, and conventions, see [AGENTS.md](AGENTS.md).
-
-## Testing
-
-Tests live in `Tests/orchardTests/` and use `MockContainerService` so they run without the container daemon.
-
-```bash
-swift test                                       # all tests
-swift test --filter <TestClass.testMethod>       # a single test
-```
