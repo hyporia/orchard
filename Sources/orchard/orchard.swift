@@ -1,3 +1,4 @@
+import OSLog
 import SwiftUI
 
 @MainActor
@@ -7,6 +8,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var popover: NSPopover?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        Logger.app.info("Orchard launched")
         NSApp.setActivationPolicy(.regular)
         NSApp.activate(ignoringOtherApps: true)
         setupStatusItem()
@@ -88,6 +90,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private func dropToBackground() {
+        Logger.app.debug("App moved to background (accessory mode)")
         NSApp.setActivationPolicy(.accessory)
     }
 }

@@ -1,4 +1,5 @@
 import Foundation
+import OSLog
 
 @MainActor
 @Observable
@@ -46,15 +47,18 @@ class ImageViewModel {
     }
 
     func delete(reference: String) async {
+        Logger.images.info("Deleting image \(reference, privacy: .public)")
         do {
             try await service.deleteImage(reference: reference)
             await fetchImages()
         } catch {
+            Logger.images.error("Failed to delete image \(reference, privacy: .public): \(error.localizedDescription, privacy: .public)")
             errorMessage = error.localizedDescription
         }
     }
 
     func pull(reference: String) async {
+        Logger.images.info("Pulling image \(reference, privacy: .public)")
         isPulling = true
         errorMessage = nil
         defer { isPulling = false }
@@ -63,6 +67,7 @@ class ImageViewModel {
             await fetchImages()
         } catch {
             if !Task.isCancelled {
+                Logger.images.error("Failed to pull image \(reference, privacy: .public): \(error.localizedDescription, privacy: .public)")
                 errorMessage = error.localizedDescription
             }
         }

@@ -1,4 +1,5 @@
 import Foundation
+import OSLog
 
 @MainActor
 @Observable
@@ -36,6 +37,7 @@ class SystemViewModel {
                 cliMissing: resolvedStatus.cliMissing
             )
         } catch {
+            Logger.system.error("Failed to fetch system info: \(error.localizedDescription, privacy: .public)")
             self.systemInfo = SystemInfo(
                 isRunning: false, status: "stopped", version: "Unknown", diskUsage: nil)
         }
@@ -67,24 +69,28 @@ class SystemViewModel {
     }
 
     func startSystem() async {
+        Logger.system.info("Starting container system")
         isLoading = true
         do {
             try await service.startSystem()
             try await Task.sleep(for: .seconds(1))
             await fetchSystemInfo()
         } catch {
+            Logger.system.error("Failed to start system: \(error.localizedDescription, privacy: .public)")
             errorMessage = error.localizedDescription
             isLoading = false
         }
     }
 
     func stopSystem() async {
+        Logger.system.info("Stopping container system")
         isLoading = true
         do {
             try await service.stopSystem()
             try await Task.sleep(for: .seconds(1))
             await fetchSystemInfo()
         } catch {
+            Logger.system.error("Failed to stop system: \(error.localizedDescription, privacy: .public)")
             errorMessage = error.localizedDescription
             isLoading = false
         }

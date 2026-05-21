@@ -1,4 +1,5 @@
 import Foundation
+import OSLog
 
 enum ContainerCLIError: Error, LocalizedError {
     case executableNotFound
@@ -90,6 +91,7 @@ final class ContainerCLI: ContainerCLIProtocol, @unchecked Sendable {
     }
 
     func run(arguments: [String]) async throws -> String {
+        Logger.cli.debug("container \(arguments.first ?? "", privacy: .public) (\(arguments.count - 1) args)")
         let state = CommandState()
         return try await withTaskCancellationHandler {
             try await withCheckedThrowingContinuation {
@@ -136,6 +138,9 @@ final class ContainerCLI: ContainerCLIProtocol, @unchecked Sendable {
                         if process.terminationStatus != 0 {
                             let errorMsg =
                                 String(data: stderrData, encoding: .utf8) ?? "Unknown error"
+                            Logger.cli.error(
+                                "container \(arguments.first ?? "", privacy: .public) failed (exit \(process.terminationStatus)): \(errorMsg.trimmingCharacters(in: .whitespacesAndNewlines), privacy: .public)"
+                            )
                             continuation.resume(
                                 throwing: ContainerCLIError.processFailed(errorMsg))
                             return
@@ -156,10 +161,14 @@ final class ContainerCLI: ContainerCLIProtocol, @unchecked Sendable {
 
     func streamLogs(containerId: String) -> AsyncThrowingStream<String, Error> {
         AsyncThrowingStream<String, Error> { continuation in
+            Logger.cli.debug("Starting log stream for container \(containerId, privacy: .public)")
             let process: Process
             do {
                 process = try self.makeProcess(arguments: ["logs", "-f", containerId])
             } catch {
+                Logger.cli.error(
+                    "Failed to start log stream for \(containerId, privacy: .public): \(error.localizedDescription, privacy: .public)"
+                )
                 continuation.finish(throwing: error)
                 return
             }
@@ -173,6 +182,7 @@ final class ContainerCLI: ContainerCLIProtocol, @unchecked Sendable {
             pipe.fileHandleForReading.readabilityHandler = { handle in
                 let data = handle.availableData
                 if data.isEmpty {
+                    Logger.cli.debug("Log stream EOF for container \(containerId, privacy: .public)")
                     handle.readabilityHandler = nil
                     continuation.finish()
                     return
@@ -211,6 +221,7 @@ final class ContainerCLI: ContainerCLIProtocol, @unchecked Sendable {
         if let overridePath = env["ORCHARD_CONTAINER_PATH"], !overridePath.isEmpty,
             FileManager.default.isExecutableFile(atPath: overridePath)
         {
+            Logger.cli.debug("Using ORCHARD_CONTAINER_PATH override: \(overridePath, privacy: .public)")
             return URL(fileURLWithPath: overridePath)
         }
 
@@ -255,6 +266,7 @@ final class ContainerCLI: ContainerCLIProtocol, @unchecked Sendable {
         }
 
         for path in searchPaths where FileManager.default.isExecutableFile(atPath: path) {
+            Logger.cli.info("Container executable discovered at \(path, privacy: .public)")
             return URL(fileURLWithPath: path)
         }
 
@@ -276,6 +288,7 @@ final class ContainerCLI: ContainerCLIProtocol, @unchecked Sendable {
                     !path.isEmpty,
                     FileManager.default.isExecutableFile(atPath: path)
                 {
+                    Logger.cli.info("Container executable found via 'which container': \(path, privacy: .public)")
                     return URL(fileURLWithPath: path)
                 }
             }
@@ -283,6 +296,7 @@ final class ContainerCLI: ContainerCLIProtocol, @unchecked Sendable {
             // Ignore — treated as "not found".
         }
 
+        Logger.cli.error("Container executable not found in any known location")
         return nil
     }
 }

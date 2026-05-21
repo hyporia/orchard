@@ -1,4 +1,5 @@
 import Foundation
+import OSLog
 
 protocol ContainerServiceProtocol: Sendable {
     func fetchContainers() async throws -> [ContainerItem]
@@ -71,6 +72,7 @@ struct ContainerService: ContainerServiceProtocol {
         do {
             return try decoder.decode([ContainerItem].self, from: data)
         } catch {
+            Logger.service.debug("Array JSON decode failed, retrying line-by-line: \(error.localizedDescription, privacy: .public)")
             let lines = output.components(separatedBy: .newlines)
                 .filter { !$0.trimmingCharacters(in: .whitespaces).isEmpty }
             var items: [ContainerItem] = []
@@ -145,10 +147,12 @@ struct ContainerService: ContainerServiceProtocol {
         } catch ContainerCLIError.executableNotFound {
             // CLI not installed is distinct from "daemon stopped": surface it
             // so the UI can tell the user to install `container`, not start it.
+            Logger.service.info("Container CLI not installed; reporting daemon as stopped with cliMissing=true")
             return SystemStatus(status: "stopped", apiServerVersion: nil, cliMissing: true)
         } catch {
             // Any other failure (daemon down, decode error) = daemon stopped.
             // This is the only intentional error-swallow in the service.
+            Logger.service.error("System status check failed (reporting as stopped): \(error.localizedDescription, privacy: .public)")
             return SystemStatus(status: "stopped", apiServerVersion: nil)
         }
     }

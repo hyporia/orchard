@@ -1,4 +1,5 @@
 import Foundation
+import OSLog
 
 @MainActor
 @Observable
@@ -70,6 +71,7 @@ class ContainerViewModel {
             // polls every 2s; a transient failure must not raise an alert or
             // clobber errorMessage set by a user-initiated action. The
             // previous stats simply remain on screen until the next poll.
+            Logger.containers.debug("Stats poll failed (transient, suppressed): \(error.localizedDescription, privacy: .public)")
         }
     }
 
@@ -90,28 +92,33 @@ class ContainerViewModel {
     }
 
     func start(containerId: String) async {
+        Logger.containers.info("Starting container \(containerId, privacy: .public)")
         processingIds.insert(containerId)
         defer { processingIds.remove(containerId) }
         do {
             try await service.startContainer(id: containerId)
             await fetchContainers()
         } catch {
+            Logger.containers.error("Failed to start container \(containerId, privacy: .public): \(error.localizedDescription, privacy: .public)")
             errorMessage = error.localizedDescription
         }
     }
 
     func stop(containerId: String) async {
+        Logger.containers.info("Stopping container \(containerId, privacy: .public)")
         processingIds.insert(containerId)
         defer { processingIds.remove(containerId) }
         do {
             try await service.stopContainer(id: containerId)
             await fetchContainers()
         } catch {
+            Logger.containers.error("Failed to stop container \(containerId, privacy: .public): \(error.localizedDescription, privacy: .public)")
             errorMessage = error.localizedDescription
         }
     }
 
     func restart(containerId: String) async {
+        Logger.containers.info("Restarting container \(containerId, privacy: .public)")
         processingIds.insert(containerId)
         defer { processingIds.remove(containerId) }
         do {
@@ -119,11 +126,13 @@ class ContainerViewModel {
             try await service.startContainer(id: containerId)
             await fetchContainers()
         } catch {
+            Logger.containers.error("Failed to restart container \(containerId, privacy: .public): \(error.localizedDescription, privacy: .public)")
             errorMessage = error.localizedDescription
         }
     }
 
     func delete(containerId: String) async {
+        Logger.containers.info("Deleting container \(containerId, privacy: .public)")
         processingIds.insert(containerId)
         defer { processingIds.remove(containerId) }
         do {
@@ -135,11 +144,13 @@ class ContainerViewModel {
             try await service.deleteContainer(id: containerId)
             await fetchContainers()
         } catch {
+            Logger.containers.error("Failed to delete container \(containerId, privacy: .public): \(error.localizedDescription, privacy: .public)")
             errorMessage = error.localizedDescription
         }
     }
 
     func run(image: String, name: String?, options: RunContainerOptions) async throws {
+        Logger.containers.info("Running image \(image, privacy: .public)")
         try await service.runContainer(image: image, name: name, options: options)
         await fetchContainers()
     }

@@ -1,4 +1,5 @@
 import Foundation
+import OSLog
 
 @MainActor
 @Observable
@@ -21,6 +22,7 @@ class ContainerLogViewModel {
 
     func startStreaming() {
         let displayName = containerName ?? containerId
+        Logger.logs.info("Starting log stream for container \(self.containerId, privacy: .public)")
         logs = "Starting log stream for \(displayName)...\n"
 
         streamTask?.cancel()
@@ -33,6 +35,7 @@ class ContainerLogViewModel {
                     self.appendLog(chunk)
                 }
             } catch {
+                Logger.logs.error("Log stream error for container \(self.containerId, privacy: .public): \(error.localizedDescription, privacy: .public)")
                 self.appendLog("\nError starting process: \(error.localizedDescription)\n")
             }
         }
@@ -52,6 +55,7 @@ class ContainerLogViewModel {
     }
 
     func stopStreaming() {
+        Logger.logs.debug("Stopping log stream for container \(self.containerId, privacy: .public)")
         streamTask?.cancel()
         streamTask = nil
     }

@@ -1,4 +1,5 @@
 import Foundation
+import OSLog
 
 @MainActor
 @Observable
@@ -30,10 +31,12 @@ class VolumeViewModel {
     }
 
     func delete(name: String) async {
+        Logger.volumes.info("Deleting volume \(name, privacy: .public)")
         do {
             try await service.deleteVolume(name: name)
             await fetchVolumes()
         } catch {
+            Logger.volumes.error("Failed to delete volume \(name, privacy: .public): \(error.localizedDescription, privacy: .public)")
             errorMessage = error.localizedDescription
         }
     }
