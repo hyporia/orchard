@@ -6,6 +6,15 @@ struct ContainerItem: Identifiable, Equatable, Sendable {
     let state: String
     let status: String
     let names: String
+    var publishedPorts: [PublishedPort] = []
+    var startedDate: Date? = nil
+
+    struct PublishedPort: Decodable, Equatable, Hashable, Sendable {
+        let containerPort: Int
+        let hostPort: Int
+        let proto: String?
+        let hostAddress: String?
+    }
 }
 
 extension ContainerItem: Decodable {
@@ -19,6 +28,7 @@ extension ContainerItem: Decodable {
         let name: String?
         let image: ImageInfo?
         let initProcess: InitProcess?
+        let publishedPorts: [PublishedPort]?
 
         struct ImageInfo: Decodable {
             let reference: String?
@@ -30,6 +40,11 @@ extension ContainerItem: Decodable {
         }
     }
 
+    struct RuntimeStatus: Decodable {
+        let state: String?
+        let startedDate: String?
+    }
+
     init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         let config = try container.decode(Configuration.self, forKey: .configuration)
@@ -37,8 +52,13 @@ extension ContainerItem: Decodable {
         self.id = config.id
         self.names = config.name ?? config.id
         self.image = config.image?.reference ?? "unknown"
+        self.publishedPorts = config.publishedPorts ?? []
 
-        self.state = try container.decodeIfPresent(String.self, forKey: .status) ?? "unknown"
+        let runtimeStatus = try container.decodeIfPresent(RuntimeStatus.self, forKey: .status)
+        self.state = runtimeStatus?.state ?? "unknown"
         self.status = self.state.capitalized
+        self.startedDate = runtimeStatus?.startedDate.flatMap {
+            ISO8601DateFormatter().date(from: $0)
+        }
     }
 }

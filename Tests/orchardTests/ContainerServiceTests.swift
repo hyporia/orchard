@@ -108,8 +108,8 @@ private enum JSON {
         var config = "\"id\":\"\(id)\""
         if let name { config += ",\"name\":\"\(name)\"" }
         if let image { config += ",\"image\":{\"reference\":\"\(image)\"}" }
-        var obj = "{\"configuration\":{\(config)}"
-        if let status { obj += ",\"status\":\"\(status)\"" }
+        var obj = "{\"id\":\"\(id)\",\"configuration\":{\(config)}"
+        if let status { obj += ",\"status\":{\"networks\":[],\"state\":\"\(status)\"}" }
         obj += "}"
         return obj
     }
@@ -140,6 +140,41 @@ struct ContainerServiceContainerTests {
         // name/image fall back to id / "unknown" when absent.
         #expect(items[1].names == "def")
         #expect(items[1].image == "unknown")
+    }
+
+    @Test func fetchContainersDecodesPortsAndStartedDate() async throws {
+        let (service, mock) = makeService()
+        mock.stub(
+            output: """
+                [{"id":"web","configuration":{"id":"web",\
+                "image":{"reference":"nginx:latest"},\
+                "publishedPorts":[\
+                {"containerPort":80,"count":1,"hostAddress":"0.0.0.0","hostPort":8080,"proto":"tcp"},\
+                {"containerPort":53,"count":1,"hostAddress":"0.0.0.0","hostPort":5353,"proto":"udp"}]},\
+                "status":{"networks":[],"startedDate":"2026-06-11T18:19:33Z","state":"running"}}]
+                """)
+
+        let items = try await service.fetchContainers()
+
+        #expect(items.count == 1)
+        #expect(items[0].publishedPorts.count == 2)
+        #expect(items[0].publishedPorts[0].hostPort == 8080)
+        #expect(items[0].publishedPorts[0].containerPort == 80)
+        #expect(items[0].publishedPorts[0].proto == "tcp")
+        #expect(items[0].publishedPorts[1].proto == "udp")
+        let started = try #require(items[0].startedDate)
+        #expect(started == ISO8601DateFormatter().date(from: "2026-06-11T18:19:33Z"))
+    }
+
+    @Test func fetchContainersDefaultsPortsAndStartedDateWhenAbsent() async throws {
+        let (service, mock) = makeService()
+        let json = "[\(JSON.container(id: "abc", name: nil, image: nil, status: "stopped"))]"
+        mock.stub(output: json)
+
+        let items = try await service.fetchContainers()
+
+        #expect(items[0].publishedPorts.isEmpty)
+        #expect(items[0].startedDate == nil)
     }
 
     @Test func fetchContainersFallsBackToNDJSON() async throws {
@@ -439,10 +474,15 @@ struct ContainerServiceImageTests {
 
     @Test func fetchImagesDecodesResponse() async throws {
         let (service, mock) = makeService()
+        // container >= 1.0.0 shape: metadata nested under `configuration`,
+        // per-platform sizes under `variants`.
         mock.stub(
             output: """
-                [{"reference":"nginx:latest","fullSize":"100MB",\
-                "descriptor":{"size":12345,"digest":"sha256:abc"}}]
+                [{"configuration":{"creationDate":"2026-02-13T19:13:23Z",\
+                "descriptor":{"digest":"sha256:abc","mediaType":"application/vnd.oci.image.index.v1+json","size":12345},\
+                "name":"nginx:latest"},\
+                "id":"abc",\
+                "variants":[{"platform":{"architecture":"arm64","os":"linux"},"size":46115274}]}]
                 """)
 
         let images = try await service.fetchImages()
@@ -451,7 +491,8 @@ struct ContainerServiceImageTests {
         #expect(images.count == 1)
         #expect(images[0].reference == "nginx:latest")
         #expect(images[0].id == "nginx:latest")
-        #expect(images[0].fullSize == "100MB")
+        #expect(images[0].createdAt == "2026-02-13T19:13:23Z")
+        #expect(images[0].fullSize == formatBytes(46_115_274))
         #expect(images[0].descriptor?.size == 12345)
         #expect(images[0].descriptor?.digest == "sha256:abc")
     }
@@ -500,10 +541,13 @@ struct ContainerServiceVolumeTests {
 
     @Test func fetchVolumesDecodesResponse() async throws {
         let (service, mock) = makeService()
+        // container >= 1.0.0 shape: metadata nested under `configuration`.
         mock.stub(
             output: """
-                [{"name":"data","format":"ext4","driver":"local",\
-                "source":"/nonexistent/path/\(UUID().uuidString)","sizeInBytes":1024}]
+                [{"configuration":{"creationDate":"2026-01-20T20:47:07Z",\
+                "driver":"local","format":"ext4","labels":{},"name":"data","options":{},\
+                "sizeInBytes":1024,"source":"/nonexistent/path/\(UUID().uuidString)"},\
+                "id":"data"}]
                 """)
 
         let volumes = try await service.fetchVolumes()
@@ -527,7 +571,7 @@ struct ContainerServiceVolumeTests {
 
         mock.stub(
             output: """
-                [{"name":"vol","source":"\(tmp.path)"}]
+                [{"configuration":{"name":"vol","source":"\(tmp.path)"},"id":"vol"}]
                 """)
 
         let volumes = try await service.fetchVolumes()
@@ -539,7 +583,7 @@ struct ContainerServiceVolumeTests {
 
     @Test func fetchVolumesHandlesNilSource() async throws {
         let (service, mock) = makeService()
-        mock.stub(output: #"[{"name":"vol"}]"#)
+        mock.stub(output: #"[{"configuration":{"name":"vol"},"id":"vol"}]"#)
 
         let volumes = try await service.fetchVolumes()
 
@@ -555,6 +599,35 @@ struct ContainerServiceVolumeTests {
         try await service.deleteVolume(name: "data")
 
         #expect(mock.lastArguments == ["volume", "rm", "data"])
+    }
+}
+
+// MARK: - Uptime formatting
+
+@Suite("formatUptime")
+struct UptimeFormattingTests {
+    private let now = Date(timeIntervalSince1970: 1_000_000)
+
+    @Test func formatsSubMinute() {
+        #expect(formatUptime(since: now.addingTimeInterval(-30), now: now) == "Up <1m")
+    }
+
+    @Test func formatsMinutes() {
+        #expect(formatUptime(since: now.addingTimeInterval(-4 * 60), now: now) == "Up 4m")
+    }
+
+    @Test func formatsHoursAndMinutes() {
+        let start = now.addingTimeInterval(-(2 * 3600 + 15 * 60))
+        #expect(formatUptime(since: start, now: now) == "Up 2h 15m")
+    }
+
+    @Test func formatsDaysAndHours() {
+        let start = now.addingTimeInterval(-(5 * 86400 + 3 * 3600))
+        #expect(formatUptime(since: start, now: now) == "Up 5d 3h")
+    }
+
+    @Test func clampsFutureDatesToZero() {
+        #expect(formatUptime(since: now.addingTimeInterval(60), now: now) == "Up <1m")
     }
 }
 

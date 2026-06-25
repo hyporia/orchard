@@ -12,7 +12,7 @@ struct ContainerStat: Decodable, Identifiable, Sendable, Equatable {
     let numProcesses: Int?
 }
 
-struct ImageItem: Decodable, Identifiable, Sendable, Equatable {
+struct ImageItem: Identifiable, Sendable, Equatable {
     var id: String { reference }
     let reference: String
     let fullSize: String?
@@ -25,7 +25,37 @@ struct ImageItem: Decodable, Identifiable, Sendable, Equatable {
     let descriptor: Descriptor?
 }
 
-struct VolumeItem: Decodable, Identifiable, Sendable, Equatable {
+extension ImageItem: Decodable {
+    private enum CodingKeys: String, CodingKey {
+        case configuration, variants
+    }
+
+    private struct Configuration: Decodable {
+        let name: String
+        let creationDate: String?
+        let descriptor: Descriptor?
+    }
+
+    private struct Variant: Decodable {
+        let size: Int64?
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        let config = try c.decode(Configuration.self, forKey: .configuration)
+        self.reference = config.name
+        self.createdAt = config.creationDate
+        self.descriptor = config.descriptor
+        // The CLI provides no pre-formatted size; derive it from the
+        // per-platform variant sizes.
+        let variantSizes =
+            try c.decodeIfPresent([Variant].self, forKey: .variants)?
+            .compactMap(\.size) ?? []
+        self.fullSize = variantSizes.isEmpty ? nil : formatBytes(variantSizes.reduce(0, +))
+    }
+}
+
+struct VolumeItem: Identifiable, Sendable, Equatable {
     var id: String { name }
     let name: String
     let format: String?
@@ -34,8 +64,29 @@ struct VolumeItem: Decodable, Identifiable, Sendable, Equatable {
     let sizeInBytes: Int64?
     /// Actual on-disk usage (for sparse volume images)
     var actualSizeInBytes: Int64?
-    
+}
+
+extension VolumeItem: Decodable {
     private enum CodingKeys: String, CodingKey {
-        case name, format, driver, source, sizeInBytes
+        case configuration
+    }
+
+    private struct Configuration: Decodable {
+        let name: String
+        let format: String?
+        let driver: String?
+        let source: String?
+        let sizeInBytes: Int64?
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        let config = try c.decode(Configuration.self, forKey: .configuration)
+        self.name = config.name
+        self.format = config.format
+        self.driver = config.driver
+        self.source = config.source
+        self.sizeInBytes = config.sizeInBytes
+        self.actualSizeInBytes = nil
     }
 }

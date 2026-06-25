@@ -16,22 +16,109 @@ struct ContainerRow: View {
     }
 
     var body: some View {
-        HStack {
-            Circle()
-                .fill(isRunning ? Color.green : Color.red)
-                .frame(width: 10, height: 10)
+        VStack(alignment: .leading, spacing: 8) {
+            HStack {
+                Circle()
+                    .fill(isRunning ? Color.green : Color.red)
+                    .frame(width: 10, height: 10)
 
-            VStack(alignment: .leading, spacing: 4) {
-                Text(container.names)
-                    .font(.headline)
-                    .textSelection(.enabled)
-                Text(container.image)
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
-                    .textSelection(.enabled)
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(container.names)
+                        .font(.headline)
+                        .textSelection(.enabled)
+                    Text(container.image)
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                        .textSelection(.enabled)
+                }
 
-                if isRunning, let stat = viewModel.stats[container.id] {
-                    HStack(spacing: 12) {
+                Spacer()
+
+                Button(action: { showingLogs = true }) {
+                    Label("Logs", systemImage: "text.alignleft")
+                }
+                .buttonStyle(.plain)
+                .padding(.horizontal, 10)
+                .padding(.vertical, 6)
+                .background(Color.secondary.opacity(0.1))
+                .clipShape(Capsule())
+    
+                if isRunning {
+                    Button(action: {
+                        Task { await viewModel.stop(containerId: container.id) }
+                    }) {
+                        if isProcessing {
+                            ProgressView().controlSize(.small).tint(.red)
+                        } else {
+                            Label("Stop", systemImage: "stop.fill")
+                        }
+                    }
+                    .buttonStyle(.plain)
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 6)
+                    .background(Color.red.opacity(0.1))
+                    .foregroundStyle(.red)
+                    .clipShape(Capsule())
+                    .disabled(isProcessing)
+    
+                    Button(action: {
+                        Task { await viewModel.restart(containerId: container.id) }
+                    }) {
+                        Label("Restart", systemImage: "arrow.clockwise")
+                    }
+                    .buttonStyle(.plain)
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 6)
+                    .background(Color.blue.opacity(0.1))
+                    .foregroundStyle(.blue)
+                    .clipShape(Capsule())
+                    .disabled(isProcessing)
+                } else {
+                    Button(action: {
+                        Task { await viewModel.start(containerId: container.id) }
+                    }) {
+                        if isProcessing {
+                            ProgressView().controlSize(.small).tint(.green)
+                        } else {
+                            Label("Start", systemImage: "play.fill")
+                        }
+                    }
+                    .buttonStyle(.plain)
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 6)
+                    .background(Color.green.opacity(0.1))
+                    .foregroundStyle(.green)
+                    .clipShape(Capsule())
+                    .disabled(isProcessing)
+                }
+    
+                Button(role: .destructive, action: {
+                    showDeleteConfirmation = true
+                }) {
+                    Label("Delete", systemImage: "trash")
+                }
+                .buttonStyle(.plain)
+                .padding(.horizontal, 10)
+                .padding(.vertical, 6)
+                .background(Color.red.opacity(0.1))
+                .foregroundStyle(.red)
+                .clipShape(Capsule())
+                .confirmationDialog(
+                    "Delete Container?",
+                    isPresented: $showDeleteConfirmation,
+                    titleVisibility: .visible
+                ) {
+                    Button("Delete", role: .destructive) {
+                        Task { await viewModel.delete(containerId: container.id) }
+                    }
+                } message: {
+                    Text("This action cannot be undone.")
+                }
+            }
+
+            if isRunning {
+                HStack(spacing: 12) {
+                    if let stat = viewModel.stats[container.id] {
                         let cpuText = viewModel.cpuPercent[container.id].map {
                             String(format: "%.1f%%", $0)
                         } ?? "—"
@@ -45,94 +132,27 @@ struct ContainerRow: View {
                                 .foregroundStyle(.purple)
                         }
                     }
-                } else {
-                    Text(container.status)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-            }
 
-            Spacer()
-
-            Button(action: { showingLogs = true }) {
-                Label("Logs", systemImage: "text.alignleft")
-            }
-            .buttonStyle(.plain)
-            .padding(.horizontal, 10)
-            .padding(.vertical, 6)
-            .background(Color.secondary.opacity(0.1))
-            .clipShape(Capsule())
-
-            if isRunning {
-                Button(action: {
-                    Task { await viewModel.stop(containerId: container.id) }
-                }) {
-                    if isProcessing {
-                        ProgressView().controlSize(.small).tint(.red)
-                    } else {
-                        Label("Stop", systemImage: "stop.fill")
+                    if let started = container.startedDate {
+                        Label(formatUptime(since: started), systemImage: "clock")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
                     }
-                }
-                .buttonStyle(.plain)
-                .padding(.horizontal, 10)
-                .padding(.vertical, 6)
-                .background(Color.red.opacity(0.1))
-                .foregroundStyle(.red)
-                .clipShape(Capsule())
-                .disabled(isProcessing)
 
-                Button(action: {
-                    Task { await viewModel.restart(containerId: container.id) }
-                }) {
-                    Label("Restart", systemImage: "arrow.clockwise")
+                    ForEach(container.publishedPorts, id: \.self) { port in
+                        PortLink(port: port)
+                    }
+
+                    Spacer(minLength: 0)
                 }
-                .buttonStyle(.plain)
-                .padding(.horizontal, 10)
-                .padding(.vertical, 6)
-                .background(Color.blue.opacity(0.1))
-                .foregroundStyle(.blue)
-                .clipShape(Capsule())
-                .disabled(isProcessing)
+                .lineLimit(1)
+                .fixedSize(horizontal: false, vertical: true)
+                .padding(.leading, 18)
             } else {
-                Button(action: {
-                    Task { await viewModel.start(containerId: container.id) }
-                }) {
-                    if isProcessing {
-                        ProgressView().controlSize(.small).tint(.green)
-                    } else {
-                        Label("Start", systemImage: "play.fill")
-                    }
-                }
-                .buttonStyle(.plain)
-                .padding(.horizontal, 10)
-                .padding(.vertical, 6)
-                .background(Color.green.opacity(0.1))
-                .foregroundStyle(.green)
-                .clipShape(Capsule())
-                .disabled(isProcessing)
-            }
-
-            Button(role: .destructive, action: {
-                showDeleteConfirmation = true
-            }) {
-                Label("Delete", systemImage: "trash")
-            }
-            .buttonStyle(.plain)
-            .padding(.horizontal, 10)
-            .padding(.vertical, 6)
-            .background(Color.red.opacity(0.1))
-            .foregroundStyle(.red)
-            .clipShape(Capsule())
-            .confirmationDialog(
-                "Delete Container?",
-                isPresented: $showDeleteConfirmation,
-                titleVisibility: .visible
-            ) {
-                Button("Delete", role: .destructive) {
-                    Task { await viewModel.delete(containerId: container.id) }
-                }
-            } message: {
-                Text("This action cannot be undone.")
+                Text(container.status)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .padding(.leading, 18)
             }
         }
         .animation(.snappy, value: isRunning)
@@ -155,4 +175,50 @@ struct ContainerRow: View {
         return usageStr
     }
 
+}
+
+/// A published port shown as `host:container`. TCP ports open
+/// `http://localhost:<hostPort>` in the default browser when clicked.
+private struct PortLink: View {
+    let port: ContainerItem.PublishedPort
+
+    @State private var isHovering = false
+
+    private var isClickable: Bool {
+        port.proto?.lowercased() != "udp"
+    }
+
+    private var text: String {
+        let mapping = "\(port.hostPort):\(port.containerPort)"
+        return isClickable ? mapping : "\(mapping)/udp"
+    }
+
+    var body: some View {
+        if isClickable {
+            Button(action: {
+                if let url = URL(string: "http://localhost:\(port.hostPort)") {
+                    NSWorkspace.shared.open(url)
+                }
+            }) {
+                Label(text, systemImage: "globe")
+                    .font(.caption)
+                    .underline(isHovering)
+            }
+            .buttonStyle(.plain)
+            .foregroundStyle(.blue)
+            .onHover { hovering in
+                isHovering = hovering
+                if hovering {
+                    NSCursor.pointingHand.push()
+                } else {
+                    NSCursor.pop()
+                }
+            }
+            .help("Open http://localhost:\(port.hostPort) in browser")
+        } else {
+            Label(text, systemImage: "network")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        }
+    }
 }

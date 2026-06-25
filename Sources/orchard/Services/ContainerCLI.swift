@@ -136,10 +136,13 @@ final class ContainerCLI: ContainerCLIProtocol, @unchecked Sendable {
                         let stderrData = stderrBox.data
 
                         if process.terminationStatus != 0 {
+                            let stderrText = (String(data: stderrData, encoding: .utf8) ?? "")
+                                .trimmingCharacters(in: .whitespacesAndNewlines)
                             let errorMsg =
-                                String(data: stderrData, encoding: .utf8) ?? "Unknown error"
+                                stderrText.isEmpty
+                                ? "exit code \(process.terminationStatus)" : stderrText
                             Logger.cli.error(
-                                "container \(arguments.first ?? "", privacy: .public) failed (exit \(process.terminationStatus)): \(errorMsg.trimmingCharacters(in: .whitespacesAndNewlines), privacy: .public)"
+                                "container \(arguments.first ?? "", privacy: .public) failed (exit \(process.terminationStatus)): \(errorMsg, privacy: .public)"
                             )
                             continuation.resume(
                                 throwing: ContainerCLIError.processFailed(errorMsg))
